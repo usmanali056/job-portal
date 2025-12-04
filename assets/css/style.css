@@ -1500,6 +1500,8 @@ select.form-control {
     background: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
     padding: var(--spacing-3xl) 0 var(--spacing-xl);
+    position: relative;
+        z-index: 101;
 }
 
 .footer-grid {

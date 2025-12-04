@@ -71,6 +71,10 @@ if (isset($_GET['created'])) {
   $message = 'Job posted successfully!';
   $messageType = 'success';
 }
+if (isset($_GET['updated'])) {
+  $message = 'Job updated successfully!';
+  $messageType = 'success';
+}
 
 // Get filters
 $statusFilter = $_GET['status'] ?? '';
@@ -394,7 +398,7 @@ require_once '../includes/header.php';
                   </td>
                   <td>
                     <div class="action-buttons">
-                      <a href="<?php echo BASE_URL; ?>/job/<?php echo $job['id']; ?>" class="btn-icon" title="View">
+                      <a href="<?php echo BASE_URL; ?>/jobs/view.php?id=<?php echo $job['id']; ?>" class="btn-icon" title="View">
                         <i class="fas fa-eye"></i>
                       </a>
                       <a href="<?php echo BASE_URL; ?>/hr/edit-job.php?id=<?php echo $job['id']; ?>" class="btn-icon"

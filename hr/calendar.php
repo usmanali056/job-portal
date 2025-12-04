@@ -148,22 +148,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $stmt = $db->prepare("UPDATE events SET status = 'cancelled' WHERE id = ? AND hr_user_id = ?");
     if ($stmt->execute([$eventId, $_SESSION['user_id']])) {
-      $message = 'Event cancelled.';
-      $messageType = 'success';
+      header('Location: ' . BASE_URL . '/hr/calendar.php?month=' . $month . '&year=' . $year . '&cancelled=1');
+      exit;
     }
   } elseif ($action === 'complete_event') {
     $eventId = (int) $_POST['event_id'];
 
     $stmt = $db->prepare("UPDATE events SET status = 'completed' WHERE id = ? AND hr_user_id = ?");
     if ($stmt->execute([$eventId, $_SESSION['user_id']])) {
-      $message = 'Event marked as completed.';
-      $messageType = 'success';
+      header('Location: ' . BASE_URL . '/hr/calendar.php?month=' . $month . '&year=' . $year . '&completed=1');
+      exit;
     }
   }
 }
 
 if (isset($_GET['scheduled'])) {
   $message = 'Interview scheduled successfully!';
+  $messageType = 'success';
+}
+
+if (isset($_GET['cancelled'])) {
+  $message = 'Event cancelled successfully.';
+  $messageType = 'success';
+}
+
+if (isset($_GET['completed'])) {
+  $message = 'Event marked as completed.';
   $messageType = 'success';
 }
 
@@ -1307,32 +1317,45 @@ const eventsData = <?php echo json_encode($eventsByDate); ?>;
     gap: 0.5rem;
     padding: 0.75rem 1.5rem;
     border-radius: 0.5rem;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
     border: none;
     font-size: 0.9rem;
+    text-decoration: none;
   }
 
   .btn-primary {
-    background: var(--primary-color);
-    color: #000;
+    background: linear-gradient(135deg, #00E676, #00C853);
+    color: #000 !important;
+    box-shadow: 0 4px 15px rgba(0, 230, 118, 0.3);
   }
 
   .btn-primary:hover {
-    background: #00ff88;
+    background: linear-gradient(135deg, #00ff88, #00E676);
     transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 230, 118, 0.4);
   }
 
   .btn-outline {
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    color: var(--text-primary);
+    color: #fff;
   }
 
   .btn-outline:hover {
-    border-color: var(--primary-color);
-    color: var(--primary-color);
+    border-color: #00E676;
+    color: #00E676;
+  }
+
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
   }
 
   /* Responsive */

@@ -532,8 +532,16 @@ include '../includes/header.php';
 
   .settings-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 2fr;
     gap: 2rem;
+  }
+
+  .settings-grid .settings-section:first-child {
+    grid-row: span 1;
+  }
+
+  .settings-section {
+    height: fit-content;
   }
 
   .settings-section h2 {
@@ -550,19 +558,21 @@ include '../includes/header.php';
     color: var(--primary-color);
   }
 
-  /* Logo Upload */
+  /* Logo Upload - Compact Design */
   .logo-upload-section {
     display: flex;
-    gap: 2rem;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
   }
 
   .current-logo {
-    width: 120px;
-    height: 120px;
+    width: 100px;
+    height: 100px;
     border-radius: 1rem;
     overflow: hidden;
     flex-shrink: 0;
+    border: 2px solid rgba(255, 255, 255, 0.1);
   }
 
   .current-logo img {
@@ -574,23 +584,23 @@ include '../includes/header.php';
   .placeholder-logo {
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 230, 118, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
+    font-size: 1.75rem;
     font-weight: 700;
     color: var(--primary-color);
   }
 
   .logo-form {
-    flex: 1;
+    width: 100%;
   }
 
   .upload-area {
     border: 2px dashed rgba(255, 255, 255, 0.2);
     border-radius: 0.75rem;
-    padding: 2rem;
+    padding: 1.25rem;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -604,19 +614,20 @@ include '../includes/header.php';
   }
 
   .upload-area i {
-    font-size: 2rem;
+    font-size: 1.5rem;
     color: rgba(255, 255, 255, 0.3);
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
     display: block;
   }
 
   .upload-area p {
     color: rgba(255, 255, 255, 0.7);
     margin: 0 0 0.25rem;
+    font-size: 0.875rem;
   }
 
   .upload-area span {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: rgba(255, 255, 255, 0.5);
   }
 
@@ -628,6 +639,49 @@ include '../includes/header.php';
     height: 100%;
     opacity: 0;
     cursor: pointer;
+  }
+
+  .btn-block {
+    width: 100%;
+  }
+
+  /* Button styling for this page */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    font-size: 0.9rem;
+    text-decoration: none;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #00E676, #00C853);
+    color: #000 !important;
+    box-shadow: 0 4px 15px rgba(0, 230, 118, 0.3);
+  }
+
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #00ff88, #00E676);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 230, 118, 0.4);
+  }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+
+  .btn-outline:hover {
+    border-color: #00E676;
+    color: #00E676;
   }
 
   /* Form Styles */
@@ -765,6 +819,12 @@ include '../includes/header.php';
   }
 
   /* Responsive */
+  @media (max-width: 1200px) {
+    .settings-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
   @media (max-width: 1024px) {
     .settings-grid {
       grid-template-columns: 1fr;

@@ -22,32 +22,32 @@
         <h4 class="footer-title">For Job Seekers</h4>
         <ul class="footer-links">
           <li><a href="<?php echo BASE_URL; ?>/jobs/">Browse Jobs</a></li>
-          <li><a href="<?php echo BASE_URL; ?>/companies.php">Companies</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/companies/">Companies</a></li>
           <li><a href="<?php echo BASE_URL; ?>/seeker/saved-jobs.php">Saved Jobs</a></li>
-          <li><a href="<?php echo BASE_URL; ?>/seeker/profile.php">Resume Builder</a></li>
-          <li><a href="#">Career Advice</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/seeker/profile.php">My Profile</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/seeker/applications.php">My Applications</a></li>
         </ul>
       </div>
 
       <div class="footer-column">
         <h4 class="footer-title">For Employers</h4>
         <ul class="footer-links">
-          <li><a href="<?php echo BASE_URL; ?>/auth/register.php?role=hr">Post a Job</a></li>
-          <li><a href="#">Pricing</a></li>
-          <li><a href="#">Talent Search</a></li>
-          <li><a href="#">Employer Branding</a></li>
-          <li><a href="#">Recruiting Solutions</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/hr/post-job.php">Post a Job</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/auth/register.php?role=hr">Register as HR</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/hr/jobs.php">Manage Jobs</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/hr/applications.php">View Applications</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/hr/company.php">Company Profile</a></li>
         </ul>
       </div>
 
       <div class="footer-column">
         <h4 class="footer-title">Resources</h4>
         <ul class="footer-links">
-          <li><a href="#">Help Center</a></li>
-          <li><a href="#">Privacy Policy</a></li>
-          <li><a href="#">Terms of Service</a></li>
-          <li><a href="#">Contact Us</a></li>
-          <li><a href="#">About Us</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/">Home</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/jobs/">Find Jobs</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/companies/">Browse Companies</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/auth/login.php">Sign In</a></li>
+          <li><a href="<?php echo BASE_URL; ?>/auth/register.php">Register</a></li>
         </ul>
       </div>
     </div>
