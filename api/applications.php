@@ -150,7 +150,7 @@ function handlePost($db, $userId, $role)
   }
 
   // Check if already applied
-  $stmt = $db->prepare("SELECT id FROM applications WHERE user_id = ? AND job_id = ?");
+  $stmt = $db->prepare("SELECT id FROM applications WHERE seeker_id = ? AND job_id = ?");
   $stmt->execute([$userId, $jobId]);
   if ($stmt->fetch()) {
     http_response_code(409);
@@ -169,8 +169,8 @@ function handlePost($db, $userId, $role)
 
   // Create application
   $stmt = $db->prepare("
-        INSERT INTO applications (user_id, job_id, cover_letter, status, applied_at)
-        VALUES (?, ?, ?, 'pending', NOW())
+        INSERT INTO applications (seeker_id, job_id, cover_letter, status, applied_at)
+        VALUES (?, ?, ?, 'applied', NOW())
     ");
 
   if ($stmt->execute([$userId, $jobId, $coverLetter])) {
@@ -205,7 +205,7 @@ function handlePut($db, $userId, $role)
     return;
   }
 
-  $validStatuses = ['pending', 'reviewed', 'shortlisted', 'interview', 'offered', 'hired', 'rejected'];
+  $validStatuses = ['applied', 'viewed', 'shortlisted', 'interview', 'offered', 'hired', 'rejected', 'withdrawn'];
   if (!in_array($status, $validStatuses)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Invalid status']);

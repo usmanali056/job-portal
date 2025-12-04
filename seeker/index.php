@@ -55,8 +55,8 @@ $stmt = $db->prepare("SELECT COUNT(*) as total FROM applications WHERE seeker_id
 $stmt->execute([$_SESSION['user_id']]);
 $totalApplications = $stmt->fetch()['total'];
 
-// Pending Applications
-$stmt = $db->prepare("SELECT COUNT(*) as total FROM applications WHERE seeker_id = ? AND status = 'pending'");
+// Pending Applications (newly applied)
+$stmt = $db->prepare("SELECT COUNT(*) as total FROM applications WHERE seeker_id = ? AND status = 'applied'");
 $stmt->execute([$_SESSION['user_id']]);
 $pendingApplications = $stmt->fetch()['total'];
 
@@ -108,11 +108,11 @@ $recentApplications = $stmt->fetchAll();
 // Recommended Jobs (based on profile skills if available)
 $recommendedJobs = [];
 if ($profile && !empty($profile['skills'])) {
-  $skills = json_decode($profile['skills'], true) ?: [];
+  $skills = is_array($profile['skills']) ? $profile['skills'] : (json_decode($profile['skills'], true) ?: []);
   if (!empty($skills)) {
     $skillPatterns = array_map(function ($s) {
       return '%' . $s . '%'; }, array_slice($skills, 0, 5));
-    $placeholders = str_repeat('j.skills LIKE ? OR ', count($skillPatterns) - 1) . 'j.skills LIKE ?';
+    $placeholders = str_repeat('j.skills_required LIKE ? OR ', count($skillPatterns) - 1) . 'j.skills_required LIKE ?';
 
     $sql = "SELECT j.*, c.company_name, c.logo 
                 FROM jobs j 

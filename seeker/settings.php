@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$newEmail) {
       $message = 'Please enter a valid email address.';
       $messageType = 'error';
-    } elseif (!password_verify($currentPassword, $user['password'])) {
+    } elseif (!password_verify($currentPassword, $user['password_hash'])) {
       $message = 'Current password is incorrect.';
       $messageType = 'error';
     } else {
@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $newPassword = $_POST['new_password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
 
-    if (!password_verify($currentPassword, $user['password'])) {
+    if (!password_verify($currentPassword, $user['password_hash'])) {
       $message = 'Current password is incorrect.';
       $messageType = 'error';
     } elseif (strlen($newPassword) < 8) {
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $messageType = 'error';
     } else {
       $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
-      $stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
+      $stmt = $db->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
       if ($stmt->execute([$hashedPassword, $_SESSION['user_id']])) {
         $message = 'Password updated successfully!';
         $messageType = 'success';
@@ -97,13 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $messageType = 'success';
     $activeTab = 'notifications';
   } elseif ($action === 'update_privacy') {
-    $profileVisibility = $_POST['profile_visibility'] ?? 'public';
-    $showEmail = isset($_POST['show_email']) ? 1 : 0;
-    $showPhone = isset($_POST['show_phone']) ? 1 : 0;
+    $isAvailable = isset($_POST['is_available']) ? 1 : 0;
 
     if ($profile) {
-      $stmt = $db->prepare("UPDATE seeker_profiles SET profile_visibility = ? WHERE id = ?");
-      $stmt->execute([$profileVisibility, $profile['id']]);
+      $stmt = $db->prepare("UPDATE seeker_profiles SET is_available = ? WHERE id = ?");
+      $stmt->execute([$isAvailable, $profile['id']]);
     }
 
     $message = 'Privacy settings updated!';
@@ -114,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirmPassword = $_POST['confirm_password'] ?? '';
     $confirmText = $_POST['confirm_text'] ?? '';
 
-    if (!password_verify($confirmPassword, $user['password'])) {
+    if (!password_verify($confirmPassword, $user['password_hash'])) {
       $message = 'Password is incorrect.';
       $messageType = 'error';
     } elseif ($confirmText !== 'DELETE') {
@@ -122,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $messageType = 'error';
     } else {
       // Delete user and related data
-      $stmt = $db->prepare("DELETE FROM applications WHERE user_id = ?");
+      $stmt = $db->prepare("DELETE FROM applications WHERE seeker_id = ?");
       $stmt->execute([$_SESSION['user_id']]);
 
       $stmt = $db->prepare("DELETE FROM saved_jobs WHERE user_id = ?");
@@ -369,39 +367,13 @@ require_once '../includes/header.php';
             <form method="POST" class="settings-form glass-card">
               <input type="hidden" name="action" value="update_privacy">
 
-              <div class="form-group">
-                <label>Profile Visibility</label>
-                <select name="profile_visibility" class="form-control">
-                  <option value="public" <?php echo ($profile['profile_visibility'] ?? 'public') === 'public' ? 'selected' : ''; ?>>
-                    Public - Visible to all recruiters
-                  </option>
-                  <option value="limited" <?php echo ($profile['profile_visibility'] ?? '') === 'limited' ? 'selected' : ''; ?>>
-                    Limited - Visible only to companies you apply to
-                  </option>
-                  <option value="private" <?php echo ($profile['profile_visibility'] ?? '') === 'private' ? 'selected' : ''; ?>>
-                    Private - Hidden from recruiters
-                  </option>
-                </select>
-              </div>
-
               <div class="toggle-option">
                 <div class="toggle-info">
-                  <h4>Show Email on Profile</h4>
-                  <p>Allow recruiters to see your email address</p>
+                  <h4>Available for Opportunities</h4>
+                  <p>Let recruiters know you're open to new opportunities</p>
                 </div>
                 <label class="toggle-switch">
-                  <input type="checkbox" name="show_email" checked>
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-
-              <div class="toggle-option">
-                <div class="toggle-info">
-                  <h4>Show Phone Number</h4>
-                  <p>Allow recruiters to see your phone number</p>
-                </div>
-                <label class="toggle-switch">
-                  <input type="checkbox" name="show_phone">
+                  <input type="checkbox" name="is_available" <?php echo ($profile['is_available'] ?? 1) ? 'checked' : ''; ?>>
                   <span class="toggle-slider"></span>
                 </label>
               </div>

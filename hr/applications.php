@@ -198,8 +198,8 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
       </a>
       <?php
       $statuses = [
-        'pending' => ['label' => 'New', 'color' => 'warning'],
-        'reviewed' => ['label' => 'Reviewed', 'color' => 'info'],
+        'applied' => ['label' => 'New', 'color' => 'warning'],
+        'viewed' => ['label' => 'Viewed', 'color' => 'info'],
         'shortlisted' => ['label' => 'Shortlisted', 'color' => 'primary'],
         'interview' => ['label' => 'Interview', 'color' => 'purple'],
         'offered' => ['label' => 'Offered', 'color' => 'success'],
@@ -295,8 +295,8 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
                   <input type="hidden" name="action" value="update_status">
                   <input type="hidden" name="application_id" value="<?php echo $app['id']; ?>">
                   <select name="status" class="status-select <?php echo $app['status']; ?>" onchange="this.form.submit()">
-                    <option value="pending" <?php echo $app['status'] === 'pending' ? 'selected' : ''; ?>>New</option>
-                    <option value="reviewed" <?php echo $app['status'] === 'reviewed' ? 'selected' : ''; ?>>Reviewed</option>
+                    <option value="applied" <?php echo $app['status'] === 'applied' ? 'selected' : ''; ?>>New</option>
+                    <option value="viewed" <?php echo $app['status'] === 'viewed' ? 'selected' : ''; ?>>Viewed</option>
                     <option value="shortlisted" <?php echo $app['status'] === 'shortlisted' ? 'selected' : ''; ?>>Shortlisted
                     </option>
                     <option value="interview" <?php echo $app['status'] === 'interview' ? 'selected' : ''; ?>>Interview

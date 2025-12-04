@@ -116,7 +116,7 @@ $applicationTrend = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Top performing jobs
 $stmt = $db->prepare("
-  SELECT j.title, j.job_type, c.name as company_name, COUNT(a.id) as applications_count
+  SELECT j.title, j.job_type, c.company_name, COUNT(a.id) as applications_count
   FROM jobs j
   LEFT JOIN applications a ON j.id = a.job_id AND a.applied_at BETWEEN ? AND DATE_ADD(?, INTERVAL 1 DAY)
   LEFT JOIN companies c ON j.company_id = c.id
@@ -130,7 +130,7 @@ $topJobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Top hiring companies
 $stmt = $db->prepare("
-  SELECT c.name, c.industry, COUNT(j.id) as job_count, 
+  SELECT c.company_name, c.industry, COUNT(j.id) as job_count, 
          (SELECT COUNT(*) FROM applications a2 JOIN jobs j2 ON a2.job_id = j2.id WHERE j2.company_id = c.id) as total_applications
   FROM companies c
   LEFT JOIN jobs j ON c.id = j.company_id AND j.created_at BETWEEN ? AND DATE_ADD(?, INTERVAL 1 DAY)
@@ -534,7 +534,7 @@ include '../includes/header.php';
               <?php foreach ($topCompanies as $index => $company): ?>
                 <tr>
                   <td><span class="rank-badge"><?php echo $index + 1; ?></span></td>
-                  <td><?php echo htmlspecialchars($company['name']); ?></td>
+                  <td><?php echo htmlspecialchars($company['company_name']); ?></td>
                   <td><?php echo htmlspecialchars($company['industry'] ?? 'N/A'); ?></td>
                   <td><strong><?php echo number_format($company['job_count']); ?></strong></td>
                   <td><?php echo number_format($company['total_applications']); ?></td>

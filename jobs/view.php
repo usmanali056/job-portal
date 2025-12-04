@@ -36,7 +36,7 @@ if (isLoggedIn() && hasRole(ROLE_SEEKER)) {
   $seekerModel = new SeekerProfile();
   $seekerProfile = $seekerModel->findByUserId(getCurrentUserId());
   if ($seekerProfile) {
-    $hasApplied = $appModel->hasApplied($jobId, $seekerProfile['id']);
+    $hasApplied = $appModel->hasApplied($jobId, getCurrentUserId());
   }
 }
 
@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['apply'])) {
 
   $applicationId = $appModel->create([
     'job_id' => $jobId,
-    'seeker_id' => $seekerProfile['id'],
+    'seeker_id' => getCurrentUserId(),
     'cover_letter' => $coverLetter,
     'resume_file' => $resumeFile
   ]);

@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
 $stmt = $db->prepare("
     SELECT j.*, c.company_name, c.logo as company_logo, c.headquarters as company_location,
            sj.saved_at,
-           (SELECT COUNT(*) FROM applications WHERE job_id = j.id AND user_id = ?) as applied
+           (SELECT COUNT(*) FROM applications WHERE job_id = j.id AND seeker_id = ?) as applied
     FROM saved_jobs sj
     JOIN jobs j ON sj.job_id = j.id
     JOIN companies c ON j.company_id = c.id

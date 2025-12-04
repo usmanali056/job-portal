@@ -69,8 +69,8 @@ class Application
                        c.company_name, c.logo as company_logo
                 FROM applications a
                 LEFT JOIN jobs j ON a.job_id = j.id
-                LEFT JOIN seeker_profiles sp ON a.seeker_id = sp.id
-                LEFT JOIN users u ON sp.user_id = u.id
+                LEFT JOIN users u ON a.seeker_id = u.id
+                LEFT JOIN seeker_profiles sp ON u.id = sp.user_id
                 LEFT JOIN companies c ON j.company_id = c.id
                 WHERE a.id = :id LIMIT 1";
     $stmt = $this->db->prepare($sql);
@@ -96,8 +96,8 @@ class Application
                        sp.resume_file_path, sp.profile_completion,
                        u.email as seeker_email
                 FROM applications a
-                LEFT JOIN seeker_profiles sp ON a.seeker_id = sp.id
-                LEFT JOIN users u ON sp.user_id = u.id
+                LEFT JOIN users u ON a.seeker_id = u.id
+                LEFT JOIN seeker_profiles sp ON u.id = sp.user_id
                 WHERE $where
                 ORDER BY a.applied_at DESC";
 

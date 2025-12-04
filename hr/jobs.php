@@ -145,9 +145,9 @@ require_once '../includes/header.php';
   <aside class="dashboard-sidebar">
     <div class="sidebar-header">
       <div class="hr-avatar">
-        <?php echo strtoupper(substr($company['name'] ?? 'HR', 0, 2)); ?>
+        <?php echo strtoupper(substr($company['company_name'] ?? 'HR', 0, 2)); ?>
       </div>
-      <h3><?php echo htmlspecialchars($company['name'] ?? $hr['email']); ?></h3>
+      <h3><?php echo htmlspecialchars($company['company_name'] ?? $hr['email']); ?></h3>
       <span class="role-badge hr">HR Manager</span>
     </div>
 

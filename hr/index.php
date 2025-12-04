@@ -475,8 +475,8 @@ require_once '../includes/header.php';
       <div class="pipeline-stages">
         <?php
         $stages = [
-          'pending' => ['label' => 'New', 'icon' => 'inbox', 'color' => 'warning'],
-          'reviewed' => ['label' => 'Reviewed', 'icon' => 'eye', 'color' => 'info'],
+          'applied' => ['label' => 'New', 'icon' => 'inbox', 'color' => 'warning'],
+          'viewed' => ['label' => 'Viewed', 'icon' => 'eye', 'color' => 'info'],
           'shortlisted' => ['label' => 'Shortlisted', 'icon' => 'star', 'color' => 'primary'],
           'interview' => ['label' => 'Interview', 'icon' => 'calendar', 'color' => 'purple'],
           'offered' => ['label' => 'Offered', 'icon' => 'gift', 'color' => 'success'],
