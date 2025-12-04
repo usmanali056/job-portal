@@ -4,7 +4,6 @@
  * Browse all verified companies
  */
 
-session_start();
 require_once '../config/config.php';
 require_once '../classes/Database.php';
 require_once '../classes/Company.php';
@@ -17,30 +16,33 @@ $perPage = 12;
 $offset = ($page - 1) * $perPage;
 
 // Filters
-$search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$industry = isset($_GET['industry']) ? trim($_GET['industry']) : '';
-$size = isset($_GET['size']) ? trim($_GET['size']) : '';
+$filters = [
+  'search' => isset($_GET['search']) ? trim($_GET['search']) : '',
+  'industry' => isset($_GET['industry']) ? trim($_GET['industry']) : '',
+  'size' => isset($_GET['size']) ? trim($_GET['size']) : '',
+  'sort' => isset($_GET['sort']) ? trim($_GET['sort']) : 'jobs'
+];
 
 // Build query
-$where = ["is_verified = 1"];
+$where = ["verification_status = 'verified'"];
 $params = [];
 
-if ($search) {
-  $where[] = "(name LIKE ? OR description LIKE ? OR location LIKE ?)";
-  $searchTerm = "%$search%";
+if ($filters['search']) {
+  $where[] = "(company_name LIKE ? OR description LIKE ? OR headquarters LIKE ?)";
+  $searchTerm = "%" . $filters['search'] . "%";
   $params[] = $searchTerm;
   $params[] = $searchTerm;
   $params[] = $searchTerm;
 }
 
-if ($industry) {
+if ($filters['industry']) {
   $where[] = "industry = ?";
-  $params[] = $industry;
+  $params[] = $filters['industry'];
 }
 
-if ($size) {
+if ($filters['size']) {
   $where[] = "company_size = ?";
-  $params[] = $size;
+  $params[] = $filters['size'];
 }
 
 $whereClause = implode(' AND ', $where);
@@ -51,13 +53,31 @@ $countStmt->execute($params);
 $totalCompanies = $countStmt->fetchColumn();
 $totalPages = ceil($totalCompanies / $perPage);
 
+// Sorting
+$orderBy = "active_jobs DESC, c.company_name ASC";
+switch ($filters['sort']) {
+  case 'name_asc':
+    $orderBy = "c.company_name ASC";
+    break;
+  case 'name_desc':
+    $orderBy = "c.company_name DESC";
+    break;
+  case 'newest':
+    $orderBy = "c.created_at DESC";
+    break;
+  case 'jobs':
+  default:
+    $orderBy = "active_jobs DESC, c.company_name ASC";
+    break;
+}
+
 // Get companies with job counts
 $sql = "
     SELECT c.*, 
            (SELECT COUNT(*) FROM jobs WHERE company_id = c.id AND status = 'active') as active_jobs
     FROM companies c
     WHERE $whereClause
-    ORDER BY active_jobs DESC, c.name ASC
+    ORDER BY $orderBy
     LIMIT $perPage OFFSET $offset
 ";
 $stmt = $db->prepare($sql);
@@ -65,559 +85,756 @@ $stmt->execute($params);
 $companies = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get industries for filter
-$industriesStmt = $db->query("SELECT DISTINCT industry FROM companies WHERE is_verified = 1 AND industry IS NOT NULL ORDER BY industry");
+$industriesStmt = $db->query("SELECT DISTINCT industry FROM companies WHERE verification_status = 'verified' AND industry IS NOT NULL AND industry != '' ORDER BY industry");
 $industries = $industriesStmt->fetchAll(PDO::FETCH_COLUMN);
 
 // Get company sizes for filter
-$sizesStmt = $db->query("SELECT DISTINCT company_size FROM companies WHERE is_verified = 1 AND company_size IS NOT NULL ORDER BY company_size");
-$sizes = $sizesStmt->fetchAll(PDO::FETCH_COLUMN);
+$sizes = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+'];
 
-$pageTitle = "Companies - JobNexus";
+$pageTitle = "Companies";
 include '../includes/header.php';
 ?>
 
-<div class="companies-page">
-  <!-- Hero Section -->
-  <section class="page-hero">
+<div class="jobs-page companies-page">
     <div class="container">
-      <h1>Discover Top Companies</h1>
-      <p>Explore verified employers and find your next opportunity</p>
-
-      <!-- Search Form -->
-      <form class="search-form" method="GET">
-        <div class="search-input-group">
-          <i class="fas fa-search"></i>
-          <input type="text" name="search" placeholder="Search companies..."
-            value="<?php echo htmlspecialchars($search); ?>">
-        </div>
-        <button type="submit" class="btn btn-primary">Search</button>
-      </form>
-    </div>
-  </section>
-
-  <div class="container">
-    <div class="page-content">
-      <!-- Filters Sidebar -->
-      <aside class="filters-sidebar">
-        <div class="glass-card">
-          <h3>Filters</h3>
-
-          <form method="GET" id="filterForm">
-            <?php if ($search): ?>
-              <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
-            <?php endif; ?>
-
-            <div class="filter-group">
-              <label>Industry</label>
-              <select name="industry" onchange="document.getElementById('filterForm').submit()">
-                <option value="">All Industries</option>
-                <?php foreach ($industries as $ind): ?>
-                  <option value="<?php echo htmlspecialchars($ind); ?>" <?php echo $industry === $ind ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($ind); ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-
-            <div class="filter-group">
-              <label>Company Size</label>
-              <select name="size" onchange="document.getElementById('filterForm').submit()">
-                <option value="">All Sizes</option>
-                <?php foreach ($sizes as $sz): ?>
-                  <option value="<?php echo htmlspecialchars($sz); ?>" <?php echo $size === $sz ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($sz); ?> employees
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-
-            <?php if ($industry || $size): ?>
-              <a href="index.php<?php echo $search ? '?search=' . urlencode($search) : ''; ?>"
-                class="btn btn-outline btn-block">
-                Clear Filters
-              </a>
-            <?php endif; ?>
-          </form>
-        </div>
-
-        <!-- Stats -->
-        <div class="glass-card stats-card">
-          <div class="stat">
-            <span class="stat-number"><?php echo $totalCompanies; ?></span>
-            <span class="stat-label">Companies</span>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Companies Grid -->
-      <main class="companies-main">
-        <?php if ($search || $industry || $size): ?>
-          <div class="search-results-info">
-            <span>Showing <?php echo count($companies); ?> of <?php echo $totalCompanies; ?> companies</span>
-            <?php if ($search): ?>
-              <span class="search-term">for "<?php echo htmlspecialchars($search); ?>"</span>
-            <?php endif; ?>
-          </div>
-        <?php endif; ?>
-
-        <?php if (empty($companies)): ?>
-          <div class="glass-card empty-state">
-            <i class="fas fa-building"></i>
-            <h2>No Companies Found</h2>
-            <p>Try adjusting your search or filters</p>
-            <a href="index.php" class="btn btn-primary">View All Companies</a>
-          </div>
-        <?php else: ?>
-          <div class="companies-grid">
-            <?php foreach ($companies as $company): ?>
-              <div class="company-card">
-                <div class="company-card-header">
-                  <div class="company-logo">
-                    <?php if ($company['logo']): ?>
-                      <img src="../uploads/logos/<?php echo htmlspecialchars($company['logo']); ?>"
-                        alt="<?php echo htmlspecialchars($company['name']); ?>">
-                    <?php else: ?>
-                      <span><?php echo strtoupper(substr($company['name'], 0, 2)); ?></span>
-                    <?php endif; ?>
-                  </div>
-                  <?php if ($company['active_jobs'] > 0): ?>
-                    <span class="hiring-badge">
-                      <i class="fas fa-briefcase"></i>
-                      <?php echo $company['active_jobs']; ?> open
-                    </span>
-                  <?php endif; ?>
-                </div>
-
-                <h3 class="company-name">
-                  <a href="profile.php?id=<?php echo $company['id']; ?>">
-                    <?php echo htmlspecialchars($company['name']); ?>
-                  </a>
-                </h3>
-
-                <?php if ($company['industry']): ?>
-                  <span class="company-industry">
-                    <i class="fas fa-industry"></i>
-                    <?php echo htmlspecialchars($company['industry']); ?>
-                  </span>
-                <?php endif; ?>
-
-                <?php if ($company['location']): ?>
-                  <span class="company-location">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <?php echo htmlspecialchars($company['location']); ?>
-                  </span>
-                <?php endif; ?>
-
-                <?php if ($company['description']): ?>
-                  <p class="company-excerpt">
-                    <?php echo substr(htmlspecialchars($company['description']), 0, 100); ?>...
+        <!-- Search Header -->
+        <div class="jobs-header">
+            <div class="jobs-header-content">
+                <h1>Discover Top Companies</h1>
+                <?php if (!empty($filters['search'])): ?>
+                  <p class="search-results-info">
+                    <span class="results-count"><?php echo number_format($totalCompanies); ?></span>
+                    <?php echo $totalCompanies === 1 ? 'company' : 'companies'; ?> found for
+                    "<span class="search-term"><?php echo sanitize($filters['search']); ?></span>"
                   </p>
+                <?php else: ?>
+                  <p><?php echo number_format($totalCompanies); ?> verified companies hiring now</p>
                 <?php endif; ?>
-
-                <div class="company-card-footer">
-                  <?php if ($company['company_size']): ?>
-                    <span class="company-size">
-                      <i class="fas fa-users"></i>
-                      <?php echo htmlspecialchars($company['company_size']); ?>
-                    </span>
-                  <?php endif; ?>
-
-                  <a href="profile.php?id=<?php echo $company['id']; ?>" class="btn btn-outline btn-sm">
-                    View Profile
-                  </a>
+                </div>
+                </div>
+                <!-- Main Search Form -->
+                <form class="search-form" method="GET" action="">
+                  <div class="search-box">
+                    <div class="search-input-group">
+                    <i class="fas fa-building"></i>
+                    <input 
+                        type="text" 
+                        name="search" 
+                        class="search-input" 
+                        placeholder="Company name, industry, or location..."
+                        value="<?php echo sanitize($filters['search']); ?>">
+                    </div>
+                <button type="submit" class="btn btn-primary search-btn">
+                    <i class="fas fa-search"></i> Search
+                </button>
+            </div>
+        </form>
+        
+        <div class="jobs-layout">
+            <!-- Filters Sidebar -->
+            <aside class="filters-sidebar">
+                <form id="filtersForm" method="GET" action="">
+                    <input type="hidden" name="search" value="<?php echo sanitize($filters['search']); ?>">
+                  <!-- Industry Filter -->
+                  <div class="filter-section">
+                    <h3 class="filter-title">
+                      <i class="fas fa-industry"></i> Industry
+                    </h3>
+                    <div class="filter-options">
+                      <label class="filter-option">
+                        <input type="radio" name="industry" value="" <?php echo !$filters['industry'] ? 'checked' : ''; ?>>
+                        <span>All Industries</span>
+                      </label>
+                      <?php foreach ($industries as $ind): ?>
+                                    <label class="filter-option">
+                                      <input type="radio" name="industry" value="<?php echo sanitize($ind); ?>" <?php echo $filters['industry'] === $ind ? 'checked' : ''; ?>>
+                                    <span><?php echo sanitize($ind); ?></span>
+                                  </label>
+                                  <?php endforeach; ?>
+                        </div>
+                        </div>
+                    <!-- Company Size Filter -->
+                    <div class="filter-section">
+                        <h3 class="filter-title">
+                            <i class="fas fa-users"></i> Company Size
+                        </h3>
+                        <div class="filter-options">
+                            <label class="filter-option">
+                                <input type="radio" name="size" value="" <?php echo !$filters['size'] ? 'checked' : ''; ?>>
+                              <span>All Sizes</span>
+                            </label>
+                            <?php foreach ($sizes as $sz): ?>
+                                    <label class="filter-option">
+                                      <input type="radio" name="size" value="<?php echo $sz; ?>" <?php echo $filters['size'] === $sz ? 'checked' : ''; ?>>
+                                    <span><?php echo $sz; ?> employees</span>
+                                  </label>
+                                  <?php endforeach; ?>
+                        </div>
+                        </div>
+                    <button type="submit" class="btn btn-primary btn-block">Apply Filters</button>
+                    <a href="<?php echo BASE_URL; ?>/companies/" class="btn btn-ghost btn-block mt-2">Clear All</a>
+                        </form>
+            </aside>
+            
+            <!-- Companies List -->
+            <div class="jobs-content">
+                <!-- Sort Bar -->
+                <div class="jobs-toolbar">
+                    <p class="jobs-count">
+                        Showing <?php echo count($companies); ?> of <?php echo number_format($totalCompanies); ?> companies
+                </p>
+                <div class="jobs-sort">
+                  <label>Sort by:</label>
+                  <select name="sort" onchange="updateSort(this.value)">
+                    <option value="jobs" <?php echo $filters['sort'] === 'jobs' ? 'selected' : ''; ?>>Most Open Jobs</option>
+                    <option value="name_asc" <?php echo $filters['sort'] === 'name_asc' ? 'selected' : ''; ?>>Name (A-Z)</option>
+                    <option value="name_desc" <?php echo $filters['sort'] === 'name_desc' ? 'selected' : ''; ?>>Name (Z-A)</option>
+                    <option value="newest" <?php echo $filters['sort'] === 'newest' ? 'selected' : ''; ?>>Recently Added</option>
+                  </select>
                 </div>
               </div>
-            <?php endforeach; ?>
-          </div>
+                
+                <!-- Companies Grid -->
+                <?php if (!empty($companies)): ?>
+                  <div class="companies-grid">
+                    <?php foreach ($companies as $company): ?>
+                          <a href="<?php echo BASE_URL; ?>/companies/profile.php?id=<?php echo $company['id']; ?>"
+                        class="company-card <?php echo $company['is_featured'] ? 'featured' : ''; ?>">
+                        <?php if ($company['is_featured']): ?>
+                          <span class="company-badge featured">Featured</span>
+                        <?php endif; ?>
+                        <?php if ($company['active_jobs'] > 0): ?>
+                          <span class="company-badge hiring">
+                            <i class="fas fa-briefcase"></i> <?php echo $company['active_jobs']; ?>
+                            <?php echo $company['active_jobs'] === 1 ? 'job' : 'jobs'; ?>
+                          </span>
+                        <?php endif; ?>
+                        <div class="company-card-header">
+                                    <div class="company-card-logo">
+                                      <?php if ($company['logo']): ?>
+                                                        <img src="<?php echo LOGO_URL . sanitize($company['logo']); ?>" alt="<?php echo sanitize($company['company_name']); ?>">
+                                                  <?php else: ?>
+                                                        <span class="initials"><?php echo getInitials($company['company_name']); ?></span>
+                                                  <?php endif; ?>
+                                                  </div>
+                                    <div class="company-card-info">
+                                        <h3 class="company-card-name"><?php echo sanitize($company['company_name']); ?></h3>
+                                      <?php if ($company['industry']): ?>
+                                        <p class="company-card-industry"><?php echo sanitize($company['industry']); ?></p>
+                                      <?php endif; ?>
+                                    </div>
+                                </div>
+                                
+                                <?php if ($company['description']): ?>
+                                  <p class="company-card-description">
+                                    <?php echo sanitize(substr($company['description'], 0, 120)); ?>
+                                    <?php echo strlen($company['description']) > 120 ? '...' : ''; ?>
+                                  </p>
+                                <?php endif; ?>
+                                    <div class="company-card-meta">
+                                  <?php if ($company['headquarters']): ?>
+                                  <span class="meta-item">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                            <?php echo sanitize($company['headquarters']); ?>
+                                            </span>
+                                            <?php endif; ?>
+                                    <?php if ($company['company_size']): ?>
+                                        <span class="meta-item">
+                                          <i class="fas fa-users"></i>
+                                            <?php echo sanitize($company['company_size']); ?>
+                                            </span>
+                                            <?php endif; ?>
+                                </div>
+                                
+                                <div class="company-card-footer">
+                                  <?php if ($company['website']): ?>
+                                    <span class="company-website">
+                                      <i class="fas fa-globe"></i> Website
+                                    </span>
+                                  <?php endif; ?>
+                                  <span class="view-profile">
+                                    View Profile <i class="fas fa-arrow-right"></i>
+                                  </span>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                            </div>
+                            
+                            <!-- Pagination -->
+                            <?php if ($totalPages > 1): ?>
+                              <div class="pagination">
+                                <?php if ($page > 1): ?>
+                                            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page - 1])); ?>" class="pagination-item">
+                                        <i class="fas fa-chevron-left"></i>
+                                      </a>
+                                      <?php endif; ?>
+                                      
+                                      <?php
+                                      $startPage = max(1, $page - 2);
+                                      $endPage = min($totalPages, $page + 2);
 
-          <!-- Pagination -->
-          <?php if ($totalPages > 1): ?>
-            <div class="pagination">
-              <?php if ($page > 1): ?>
-                <a href="?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search); ?>&industry=<?php echo urlencode($industry); ?>&size=<?php echo urlencode($size); ?>"
-                  class="btn btn-icon">
-                  <i class="fas fa-chevron-left"></i>
-                </a>
-              <?php endif; ?>
-
-              <?php
-              $startPage = max(1, $page - 2);
-              $endPage = min($totalPages, $page + 2);
-
-              if ($startPage > 1) {
-                echo '<a href="?page=1&search=' . urlencode($search) . '&industry=' . urlencode($industry) . '&size=' . urlencode($size) . '" class="btn btn-page">1</a>';
-                if ($startPage > 2) {
-                  echo '<span class="pagination-ellipsis">...</span>';
-                }
-              }
-
-              for ($i = $startPage; $i <= $endPage; $i++) {
-                $activeClass = $i === $page ? 'active' : '';
-                echo '<a href="?page=' . $i . '&search=' . urlencode($search) . '&industry=' . urlencode($industry) . '&size=' . urlencode($size) . '" class="btn btn-page ' . $activeClass . '">' . $i . '</a>';
-              }
-
-              if ($endPage < $totalPages) {
-                if ($endPage < $totalPages - 1) {
-                  echo '<span class="pagination-ellipsis">...</span>';
-                }
-                echo '<a href="?page=' . $totalPages . '&search=' . urlencode($search) . '&industry=' . urlencode($industry) . '&size=' . urlencode($size) . '" class="btn btn-page">' . $totalPages . '</a>';
-              }
-              ?>
-
-              <?php if ($page < $totalPages): ?>
-                <a href="?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search); ?>&industry=<?php echo urlencode($industry); ?>&size=<?php echo urlencode($size); ?>"
-                  class="btn btn-icon">
-                  <i class="fas fa-chevron-right"></i>
-                </a>
-              <?php endif; ?>
-            </div>
-          <?php endif; ?>
-        <?php endif; ?>
-      </main>
-    </div>
-  </div>
+                                if ($startPage > 1): ?>
+                                  <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => 1])); ?>" class="pagination-item">1</a>
+                                  <?php if ($startPage > 2): ?>
+                                      <span class="pagination-item disabled">...</span>
+                                  <?php endif; ?>
+                                <?php endif; ?>
+                            <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                                <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $i])); ?>"
+                                  class="pagination-item <?php echo $i === $page ? 'active' : ''; ?>">
+                                  <?php echo $i; ?>
+                                </a>
+                            <?php endfor; ?>
+                            <?php if ($endPage < $totalPages): ?>
+                                <?php if ($endPage < $totalPages - 1): ?>
+                                    <span class="pagination-item disabled">...</span>
+                                <?php endif; ?>
+                                <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $totalPages])); ?>"
+                                  class="pagination-item"><?php echo $totalPages; ?></a>
+                            <?php endif; ?>
+                            
+                            <?php if ($page < $totalPages): ?>
+                                            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page + 1])); ?>" class="pagination-item">
+                                        <i class="fas fa-chevron-right"></i>
+                                      </a>
+                                      <?php endif; ?>
+                                      </div>
+                                      <?php endif; ?>
+                <?php else: ?>
+                <div class="no-results">
+                  <div class="no-results-icon">
+                    <i class="fas fa-building"></i>
+                  </div>
+                  <?php if (!empty($filters['search'])): ?>
+                    <h3>No companies found for "<?php echo sanitize($filters['search']); ?>"</h3>
+                    <p>We couldn't find any companies matching your search. Try these suggestions:</p>
+                    <ul class="search-suggestions">
+                      <li><i class="fas fa-check text-accent"></i> Check for spelling errors</li>
+                      <li><i class="fas fa-check text-accent"></i> Try more general keywords</li>
+                      <li><i class="fas fa-check text-accent"></i> Remove some filters</li>
+                      <li><i class="fas fa-check text-accent"></i> Browse all companies</li>
+                    </ul>
+                  <?php else: ?>
+                  <h3>No companies found</h3>
+                  <p>Try adjusting your filter criteria to find more companies.</p>
+                        <?php endif; ?>
+                            <a href="<?php echo BASE_URL; ?>/companies/" class="btn btn-primary" style="margin-top: var(--spacing-lg);">
+                            <i class="fas fa-refresh"></i> Clear All Filters
+                          </a>
+                          </div>
+                          <?php endif; ?>
+                          </div>
+                          </div>
+                          </div>
 </div>
 
 <style>
-  .companies-page {
+/* Page Layout - Matching Jobs Page */
+.jobs-page {
+    padding: 100px 0 var(--spacing-3xl);
     min-height: 100vh;
-    padding-bottom: 4rem;
-  }
+}
 
-  .page-hero {
-    background: linear-gradient(135deg, rgba(0, 230, 118, 0.15) 0%, rgba(0, 230, 118, 0.02) 100%);
-    padding: 4rem 0;
+.jobs-header {
     text-align: center;
-    margin-bottom: 3rem;
-  }
+    margin-bottom: var(--spacing-xl);
+}
 
-  .page-hero h1 {
+.jobs-header h1 {
     font-size: 2.5rem;
-    margin-bottom: 0.5rem;
-    color: var(--text-primary);
-  }
+    margin-bottom: var(--spacing-sm);
+}
 
-  .page-hero p {
-    color: rgba(255, 255, 255, 0.7);
+.jobs-header p {
+    color: var(--text-secondary);
     font-size: 1.1rem;
-    margin-bottom: 2rem;
-  }
+}
 
-  .search-form {
+.search-form {
+    max-width: 800px;
+    margin: 0 auto var(--spacing-xl);
+}
+
+.search-form .search-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 0.5rem;
     display: flex;
-    max-width: 600px;
-    margin: 0 auto;
-    gap: 0.75rem;
-  }
+    gap: var(--spacing-sm);
+}
 
-  .search-input-group {
+.search-input-group {
     flex: 1;
     position: relative;
-  }
+    display: flex;
+    align-items: center;
+}
 
-  .search-input-group i {
+.search-input-group i {
     position: absolute;
     left: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.5);
-  }
+    color: var(--text-muted);
+}
 
-  .search-input-group input {
+.search-input-group .search-input {
     width: 100%;
     padding: 1rem 1rem 1rem 3rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
+    border: none;
+    background: transparent;
     color: var(--text-primary);
     font-size: 1rem;
-  }
+}
 
-  .search-input-group input:focus {
-    border-color: var(--primary-color);
+.search-input-group .search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-input-group .search-input:focus {
     outline: none;
-  }
+}
 
-  .page-content {
+.search-btn {
+    white-space: nowrap;
+    padding: 1rem 2rem;
+}
+
+.jobs-layout {
     display: grid;
     grid-template-columns: 280px 1fr;
-    gap: 2rem;
-  }
+    gap: var(--spacing-xl);
+}
 
-  .filters-sidebar .glass-card {
-    margin-bottom: 1.5rem;
-  }
+/* Filters Sidebar */
+.filters-sidebar {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    height: fit-content;
+    position: sticky;
+    top: 90px;
+}
 
-  .filters-sidebar h3 {
-    font-size: 1rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
+.filter-section {
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+}
 
-  .filter-group {
-    margin-bottom: 1.25rem;
-  }
+.filter-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: 0;
+}
 
-  .filter-group label {
-    display: block;
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin-bottom: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .filter-group select {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
+.filter-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
     color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.filter-title i {
+    color: var(--accent-primary);
+}
+
+.filter-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.filter-option {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
     cursor: pointer;
-  }
+    padding: var(--spacing-xs) 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    transition: color var(--transition-fast);
+}
 
-  .filter-group select:focus {
-    border-color: var(--primary-color);
-    outline: none;
-  }
+.filter-option:hover {
+    color: var(--text-primary);
+}
 
-  .stats-card {
-    text-align: center;
-    padding: 1.5rem !important;
-  }
+.filter-option input[type="radio"] {
+    accent-color: var(--accent-primary);
+    width: 16px;
+    height: 16px;
+}
 
-  .stats-card .stat-number {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--primary-color);
-    display: block;
-  }
+.filter-option span {
+    flex: 1;
+}
 
-  .stats-card .stat-label {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
-  }
+/* Content Area */
+.jobs-content {
+    min-height: 500px;
+}
 
-  .search-results-info {
-    margin-bottom: 1.5rem;
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  .search-term {
-    color: var(--primary-color);
-  }
-
-  .companies-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-  }
-
-  .company-card {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 1rem;
-    padding: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: all 0.3s ease;
-  }
-
-  .company-card:hover {
-    border-color: rgba(0, 230, 118, 0.3);
-    transform: translateY(-4px);
-    box-shadow: 0 10px 40px rgba(0, 230, 118, 0.1);
-  }
-
-  .company-card-header {
+.jobs-toolbar {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 1rem;
-  }
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+}
 
-  .company-logo {
-    width: 60px;
-    height: 60px;
-    border-radius: 0.75rem;
-    background: rgba(255, 255, 255, 0.1);
+.jobs-count {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.jobs-sort {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.jobs-sort label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.jobs-sort select {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 1rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.jobs-sort select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* Companies Grid */
+.companies-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.company-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: all 0.3s ease;
+    min-height: 280px;
+}
+
+.company-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 230, 118, 0.15);
+}
+
+.company-card.featured {
+    border-color: rgba(0, 230, 118, 0.3);
+    background: linear-gradient(135deg, rgba(0, 230, 118, 0.05) 0%, transparent 100%);
+}
+
+.company-badge {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    z-index: 1;
+}
+
+.company-badge.featured {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+}
+
+.company-badge.hiring {
+    background: rgba(0, 230, 118, 0.15);
+    color: var(--accent-primary);
+    position: static;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: var(--spacing-sm);
+    width: fit-content;
+}
+
+.company-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.company-card-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     overflow: hidden;
-  }
+    border: 1px solid var(--border-color);
+}
 
-  .company-logo img {
+.company-card-logo img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-  }
+}
 
-  .company-logo span {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--primary-color);
-  }
+.company-card-logo .initials {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    color: var(--accent-primary);
+}
 
-  .hiring-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.75rem;
-    background: rgba(0, 230, 118, 0.2);
-    color: var(--primary-color);
-    border-radius: 2rem;
-    font-size: 0.7rem;
+.company-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.company-card-name {
+    font-size: 1.15rem;
     font-weight: 600;
-  }
-
-  .company-name {
-    margin: 0 0 0.75rem;
-    font-size: 1.1rem;
-  }
-
-  .company-name a {
+    margin-bottom: 0.25rem;
     color: var(--text-primary);
-    text-decoration: none;
-    transition: color 0.3s ease;
-  }
+    line-height: 1.3;
+}
 
-  .company-name a:hover {
-    color: var(--primary-color);
-  }
+.company-card-industry {
+    font-size: 0.85rem;
+    color: var(--accent-primary);
+    font-weight: 500;
+}
 
-  .company-industry,
-  .company-location {
+.company-card-description {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: var(--spacing-md);
+    flex: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.company-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm) var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.company-card-meta .meta-item {
+    font-size: 0.8rem;
+    color: var(--text-muted);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin-bottom: 0.5rem;
-  }
+    gap: 0.4rem;
+}
 
-  .company-industry i,
-  .company-location i {
-    color: var(--primary-color);
-    width: 16px;
-  }
+.company-card-meta .meta-item i {
+    color: var(--accent-primary);
+    font-size: 0.7rem;
+}
 
-  .company-excerpt {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.5);
-    margin: 1rem 0;
-    line-height: 1.5;
-  }
-
-  .company-card-footer {
+.company-card-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-  }
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+    margin-top: auto;
+}
 
-  .company-size {
+.company-website {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.view-profile {
+    font-size: 0.85rem;
+    color: var(--accent-primary);
+    font-weight: 500;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
-  }
+    transition: gap 0.2s ease;
+}
 
-  .company-size i {
-    color: var(--primary-color);
-  }
+.company-card:hover .view-profile {
+    gap: 0.75rem;
+}
 
-  /* Empty State */
-  .empty-state {
-    text-align: center;
-    padding: 4rem 2rem;
-  }
-
-  .empty-state i {
-    font-size: 4rem;
-    color: rgba(255, 255, 255, 0.2);
-    margin-bottom: 1.5rem;
-  }
-
-  .empty-state h2 {
-    margin: 0 0 0.5rem;
-    color: var(--text-primary);
-  }
-
-  .empty-state p {
-    color: rgba(255, 255, 255, 0.5);
-    margin-bottom: 1.5rem;
-  }
-
-  /* Pagination */
-  .pagination {
+/* Pagination */
+.pagination {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 0.5rem;
-    margin-top: 3rem;
-  }
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-xl);
+}
 
-  .btn-page {
+.pagination-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-width: 40px;
     height: 40px;
+    padding: 0 var(--spacing-sm);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+}
+
+.pagination-item:hover:not(.disabled):not(.active) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.pagination-item.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--bg-primary);
+    font-weight: 600;
+}
+
+.pagination-item.disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+/* No Results */
+.no-results {
+    text-align: center;
+    padding: var(--spacing-3xl) var(--spacing-xl);
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--border-color);
+}
+
+.no-results-icon {
+    font-size: 4rem;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-lg);
+}
+
+.no-results h3 {
+    font-size: 1.5rem;
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-primary);
+}
+
+.no-results p {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.search-suggestions {
+    text-align: left;
+    max-width: 350px;
+    margin: 0 auto var(--spacing-lg);
+    list-style: none;
     padding: 0;
+}
+
+.search-suggestions li {
+    color: var(--text-secondary);
+    padding: var(--spacing-xs) 0;
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.5rem;
-    color: var(--text-primary);
-    text-decoration: none;
-    transition: all 0.3s ease;
-  }
+    gap: var(--spacing-sm);
+}
 
-  .btn-page:hover {
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-  }
+.search-suggestions li i {
+    color: var(--accent-primary);
+}
 
-  .btn-page.active {
-    background: var(--primary-color);
-    color: #000;
-    border-color: var(--primary-color);
-  }
-
-  .pagination-ellipsis {
-    color: rgba(255, 255, 255, 0.5);
-    padding: 0 0.5rem;
-  }
-
-  /* Responsive */
-  @media (max-width: 1024px) {
-    .page-content {
-      grid-template-columns: 1fr;
+/* Responsive */
+@media (max-width: 1024px) {
+    .jobs-layout {
+        grid-template-columns: 1fr;
     }
-
+    
     .filters-sidebar {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
+        position: static;
+        order: -1;
     }
-  }
+}
 
-  @media (max-width: 768px) {
-    .filters-sidebar {
-      grid-template-columns: 1fr;
+@media (max-width: 768px) {
+    .jobs-header h1 {
+        font-size: 1.75rem;
     }
-
-    .search-form {
-      flex-direction: column;
-    }
-
+    
     .companies-grid {
-      grid-template-columns: 1fr;
+        grid-template-columns: 1fr;
     }
-  }
+    
+    .search-form .search-box {
+        flex-direction: column;
+    }
+    
+    .search-btn {
+        width: 100%;
+    }
+    
+    .jobs-toolbar {
+        flex-direction: column;
+        gap: var(--spacing-md);
+        align-items: stretch;
+    }
+    
+    .jobs-sort {
+        justify-content: space-between;
+    }
+}
 </style>
+
+<script>
+function updateSort(value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('sort', value);
+    window.location.href = url.toString();
+}
+
+// Auto-submit filter form on radio change
+document.querySelectorAll('.filter-option input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.getElementById('filtersForm').submit();
+    });
+});
+</script>
 
 <?php include '../includes/footer.php'; ?>

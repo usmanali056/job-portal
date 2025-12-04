@@ -11,11 +11,11 @@ if (isLoggedIn()) {
   $role = getCurrentUserRole();
   switch ($role) {
     case ROLE_ADMIN:
-      redirect(BASE_URL . '/admin/dashboard.php');
+      redirect(BASE_URL . '/admin/');
     case ROLE_HR:
-      redirect(BASE_URL . '/hr/dashboard.php');
+      redirect(BASE_URL . '/hr/');
     default:
-      redirect(BASE_URL . '/seeker/dashboard.php');
+      redirect(BASE_URL . '/seeker/');
   }
 }
 
@@ -210,19 +210,24 @@ include __DIR__ . '/../includes/header.php';
 
   .input-icon {
     position: relative;
+    display: flex;
+    align-items: center;
   }
 
-  .input-icon i {
+  .input-icon > i:first-child {
     position: absolute;
     left: 1rem;
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-muted);
+    pointer-events: none;
+    z-index: 1;
   }
 
   .input-icon .form-control {
     padding-left: 2.75rem;
     padding-right: 3rem;
+    width: 100%;
   }
 
   .btn-toggle-password {
@@ -235,10 +240,15 @@ include __DIR__ . '/../includes/header.php';
     color: var(--text-muted);
     cursor: pointer;
     padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    transition: color var(--transition-fast);
   }
 
   .btn-toggle-password:hover {
-    color: var(--text-primary);
+    color: var(--accent-primary);
   }
 
   .auth-divider {

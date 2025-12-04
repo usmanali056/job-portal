@@ -8,15 +8,17 @@ require_once '../config/config.php';
 require_once '../classes/Database.php';
 require_once '../classes/User.php';
 require_once '../classes/Application.php';
+require_once '../classes/SeekerProfile.php';
 
-session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] !== ROLE_SEEKER) {
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_SEEKER) {
   header('Location: ' . BASE_URL . '/auth/login.php?redirect=seeker/applications');
   exit;
 }
 
 $db = Database::getInstance()->getConnection();
-$applicationModel = new Application($db);
+$applicationModel = new Application();
+$profileModel = new SeekerProfile();
+$profile = $profileModel->findByUserId($_SESSION['user_id']);
 
 // Filters
 $statusFilter = $_GET['status'] ?? '';
@@ -24,7 +26,7 @@ $statusFilter = $_GET['status'] ?? '';
 // Get all applications
 $sql = "
     SELECT a.*, j.title as job_title, j.location, j.job_type, j.salary_min, j.salary_max,
-           c.name as company_name, c.logo
+           c.company_name, c.logo
     FROM applications a 
     JOIN jobs j ON a.job_id = j.id 
     LEFT JOIN companies c ON j.company_id = c.id
@@ -59,15 +61,68 @@ $pageTitle = 'My Applications';
 require_once '../includes/header.php';
 ?>
 
-<div class="applications-page seeker">
-  <div class="page-container">
-    <!-- Page Header -->
-    <div class="page-header">
-      <div class="header-content">
-        <h1>My Applications</h1>
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <aside class="dashboard-sidebar">
+    <div class="sidebar-header">
+      <div class="seeker-avatar">
+        <?php echo strtoupper(substr($profile['first_name'] ?? 'U', 0, 1)); ?>
+      </div>
+      <h3><?php echo htmlspecialchars(($profile['first_name'] ?? '') . ' ' . ($profile['last_name'] ?? '')); ?></h3>
+      <span class="role-badge seeker">Job Seeker</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="<?php echo BASE_URL; ?>/seeker/index.php" class="nav-item">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/seeker/profile.php" class="nav-item">
+        <i class="fas fa-user"></i>
+        <span>My Profile</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/seeker/applications.php" class="nav-item active">
+        <i class="fas fa-file-alt"></i>
+        <span>My Applications</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/seeker/saved-jobs.php" class="nav-item">
+        <i class="fas fa-bookmark"></i>
+        <span>Saved Jobs</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/seeker/calendar.php" class="nav-item">
+        <i class="fas fa-calendar-alt"></i>
+        <span>Calendar</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/seeker/resume.php" class="nav-item">
+        <i class="fas fa-file-pdf"></i>
+        <span>Resume Builder</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/jobs" class="nav-item">
+        <i class="fas fa-search"></i>
+        <span>Browse Jobs</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/seeker/settings.php" class="nav-item">
+        <i class="fas fa-cog"></i>
+        <span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="<?php echo BASE_URL; ?>/auth/logout.php" class="logout-btn">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="dashboard-main">
+    <div class="dashboard-header">
+      <div class="header-left">
+        <h1><i class="fas fa-file-alt"></i> My Applications</h1>
         <p>Track your job application status</p>
       </div>
-      <div class="header-actions">
+      <div class="header-right">
         <a href="<?php echo BASE_URL; ?>/jobs" class="btn btn-primary">
           <i class="fas fa-search"></i> Find More Jobs
         </a>
@@ -204,7 +259,7 @@ require_once '../includes/header.php';
         <?php endforeach; ?>
       </div>
     <?php endif; ?>
-  </div>
+  </main>
 </div>
 
 <style>

@@ -13,24 +13,27 @@ require_once '../classes/Application.php';
 require_once '../classes/Event.php';
 
 // Check authentication and role
-session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] !== ROLE_HR) {
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_HR) {
   header('Location: ' . BASE_URL . '/auth/login.php?redirect=hr');
   exit;
 }
 
 $db = Database::getInstance()->getConnection();
-$userModel = new User($db);
-$jobModel = new Job($db);
-$companyModel = new Company($db);
-$applicationModel = new Application($db);
-$eventModel = new Event($db);
+$userModel = new User();
+$jobModel = new Job();
+$companyModel = new Company();
+$applicationModel = new Application();
+$eventModel = new Event();
 
-// Get current HR info
+// Get current HR info and company
 $hr = $userModel->findById($_SESSION['user_id']);
+$company = $companyModel->findByHRUserId($_SESSION['user_id']);
 
-// Check if HR is verified
-if (!$hr['is_verified']) {
+// Check if company is verified
+if (!$company || $company['verification_status'] !== 'verified') {
   $pageTitle = 'Account Pending Verification';
   require_once '../includes/header.php';
   ?>
@@ -45,7 +48,7 @@ if (!$hr['is_verified']) {
       <div class="pending-info">
         <div class="info-item">
           <i class="fas fa-user"></i>
-          <span><?php echo htmlspecialchars($hr['full_name']); ?></span>
+          <span><?php echo htmlspecialchars($hr['email']); ?></span>
         </div>
         <div class="info-item">
           <i class="fas fa-envelope"></i>
@@ -143,11 +146,7 @@ if (!$hr['is_verified']) {
   exit;
 }
 
-// Get company info
-$company = null;
-if ($hr['company_id']) {
-  $company = $companyModel->findById($hr['company_id']);
-}
+// Company was already fetched above
 
 // Dashboard Statistics
 // My Jobs
@@ -156,7 +155,7 @@ $stmt->execute([$_SESSION['user_id']]);
 $myJobs = $stmt->fetch()['total'];
 
 // Active Jobs
-$stmt = $db->prepare("SELECT COUNT(*) as total FROM jobs WHERE posted_by = ? AND status = 'active' AND deadline >= CURDATE()");
+$stmt = $db->prepare("SELECT COUNT(*) as total FROM jobs WHERE posted_by = ? AND status = 'active' AND (application_deadline IS NULL OR application_deadline >= CURDATE())");
 $stmt->execute([$_SESSION['user_id']]);
 $activeJobs = $stmt->fetch()['total'];
 
@@ -194,7 +193,7 @@ $shortlistedCandidates = $stmt->fetch()['total'];
 $stmt = $db->prepare("
     SELECT COUNT(*) as total 
     FROM events 
-    WHERE hr_id = ? AND event_date >= CURDATE() AND status = 'scheduled'
+    WHERE hr_user_id = ? AND event_date >= CURDATE() AND status = 'scheduled'
 ");
 $stmt->execute([$_SESSION['user_id']]);
 $scheduledInterviews = $stmt->fetch()['total'];
@@ -223,7 +222,7 @@ $newAppsToday = $stmt->fetch()['total'];
 
 // Recent Applications
 $stmt = $db->prepare("
-    SELECT a.*, j.title as job_title, u.full_name as applicant_name, u.email as applicant_email,
+    SELECT a.*, j.title as job_title, CONCAT(sp.first_name, ' ', sp.last_name) as applicant_name, u.email as applicant_email,
            sp.headline as applicant_headline
     FROM applications a 
     JOIN jobs j ON a.job_id = j.id 
@@ -250,11 +249,12 @@ $myRecentJobs = $stmt->fetchAll();
 
 // Upcoming Interviews
 $stmt = $db->prepare("
-    SELECT e.*, u.full_name as seeker_name, j.title as job_title
+    SELECT e.*, CONCAT(sp.first_name, ' ', sp.last_name) as seeker_name, j.title as job_title
     FROM events e
-    JOIN users u ON e.seeker_id = u.id
-    LEFT JOIN jobs j ON e.job_id = j.id
-    WHERE e.hr_id = ? AND e.event_date >= CURDATE() AND e.status = 'scheduled'
+    LEFT JOIN seeker_profiles sp ON e.seeker_user_id = sp.user_id
+    LEFT JOIN applications a ON e.application_id = a.id
+    LEFT JOIN jobs j ON a.job_id = j.id
+    WHERE e.hr_user_id = ? AND e.event_date >= CURDATE() AND e.status = 'scheduled'
     ORDER BY e.event_date ASC, e.event_time ASC
     LIMIT 5
 ");
@@ -310,12 +310,12 @@ require_once '../includes/header.php';
       <div class="hr-avatar">
         <i class="fas fa-user-tie"></i>
       </div>
-      <h3><?php echo htmlspecialchars($hr['full_name']); ?></h3>
+      <h3><?php echo htmlspecialchars($hr['email']); ?></h3>
       <span class="role-badge hr">HR / Recruiter</span>
       <?php if ($company): ?>
         <p class="company-name">
           <i class="fas fa-building"></i>
-          <?php echo htmlspecialchars($company['name']); ?>
+          <?php echo htmlspecialchars($company['company_name']); ?>
         </p>
       <?php endif; ?>
     </div>
@@ -336,28 +336,14 @@ require_once '../includes/header.php';
       <a href="<?php echo BASE_URL; ?>/hr/applications.php" class="nav-item">
         <i class="fas fa-file-alt"></i>
         <span>Applications</span>
-        <?php if ($pendingApplications > 0): ?>
-          <span class="badge"><?php echo $pendingApplications; ?></span>
-        <?php endif; ?>
-      </a>
-      <a href="<?php echo BASE_URL; ?>/hr/candidates.php" class="nav-item">
-        <i class="fas fa-users"></i>
-        <span>Candidates</span>
       </a>
       <a href="<?php echo BASE_URL; ?>/hr/calendar.php" class="nav-item">
         <i class="fas fa-calendar-alt"></i>
         <span>Calendar</span>
-        <?php if ($scheduledInterviews > 0): ?>
-          <span class="badge info"><?php echo $scheduledInterviews; ?></span>
-        <?php endif; ?>
       </a>
       <a href="<?php echo BASE_URL; ?>/hr/company.php" class="nav-item">
         <i class="fas fa-building"></i>
         <span>Company Profile</span>
-      </a>
-      <a href="<?php echo BASE_URL; ?>/hr/profile.php" class="nav-item">
-        <i class="fas fa-user-cog"></i>
-        <span>My Profile</span>
       </a>
     </nav>
 

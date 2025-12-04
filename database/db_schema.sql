@@ -23,6 +23,7 @@ DROP TABLE IF EXISTS companies;
 DROP TABLE IF EXISTS experience;
 DROP TABLE IF EXISTS education;
 DROP TABLE IF EXISTS seeker_profiles;
+DROP TABLE IF EXISTS password_resets;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS settings;
 SET FOREIGN_KEY_CHECKS = 1;
@@ -45,6 +46,22 @@ CREATE TABLE users (
     INDEX idx_email (email),
     INDEX idx_role (role),
     INDEX idx_verified (is_verified)
+) ENGINE=InnoDB;
+
+-- =====================================================
+-- PASSWORD RESETS - For forgot password functionality
+-- =====================================================
+CREATE TABLE password_resets (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    token VARCHAR(64) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_token (token),
+    INDEX idx_user (user_id),
+    INDEX idx_expires (expires_at)
 ) ENGINE=InnoDB;
 
 -- =====================================================
@@ -236,7 +253,7 @@ CREATE TABLE applications (
     applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
-    FOREIGN KEY (seeker_id) REFERENCES seeker_profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (seeker_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE KEY unique_application (job_id, seeker_id),
     INDEX idx_job (job_id),
     INDEX idx_seeker (seeker_id),
@@ -280,12 +297,12 @@ CREATE TABLE events (
 -- =====================================================
 CREATE TABLE saved_jobs (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    seeker_id INT NOT NULL,
+    user_id INT NOT NULL,
     job_id INT NOT NULL,
     saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (seeker_id) REFERENCES seeker_profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_save (seeker_id, job_id)
+    UNIQUE KEY unique_save (user_id, job_id)
 ) ENGINE=InnoDB;
 
 -- =====================================================

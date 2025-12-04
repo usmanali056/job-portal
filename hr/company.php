@@ -4,7 +4,6 @@
  * Manage company profile and settings
  */
 
-session_start();
 require_once '../config/config.php';
 require_once '../classes/Database.php';
 require_once '../classes/Company.php';
@@ -17,14 +16,14 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_HR) {
 }
 
 $db = Database::getInstance()->getConnection();
-$companyModel = new Company($db);
+$companyModel = new Company();
 
 $userId = $_SESSION['user_id'];
 $message = '';
 $messageType = '';
 
-// Get user's company
-$stmt = $db->prepare("SELECT c.* FROM companies c JOIN users u ON u.company_id = c.id WHERE u.id = ?");
+// Get user's company (companies.hr_user_id references users.id)
+$stmt = $db->prepare("SELECT c.* FROM companies c WHERE c.hr_user_id = ?");
 $stmt->execute([$userId]);
 $company = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -45,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $industry = trim($_POST['industry'] ?? '');
     $companySize = trim($_POST['company_size'] ?? '');
     $foundedYear = trim($_POST['founded_year'] ?? '');
-    $location = trim($_POST['location'] ?? '');
+    $headquarters = trim($_POST['headquarters'] ?? '');
     $website = trim($_POST['website'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
@@ -56,8 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
       $stmt = $db->prepare("
                 UPDATE companies SET 
-                    name = ?, description = ?, industry = ?, company_size = ?, 
-                    founded_year = ?, location = ?, website = ?, email = ?, phone = ?,
+                    company_name = ?, description = ?, industry = ?, company_size = ?, 
+                    founded_year = ?, headquarters = ?, website = ?, email = ?, phone = ?,
                     updated_at = NOW()
                 WHERE id = ?
             ");
@@ -69,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $industry,
           $companySize,
           $foundedYear ?: null,
-          $location,
+          $headquarters,
           $website,
           $email,
           $phone,
@@ -207,49 +206,60 @@ include '../includes/header.php';
   <!-- Sidebar -->
   <aside class="dashboard-sidebar">
     <div class="sidebar-header">
-      <div class="user-avatar">
-        <?php echo strtoupper(substr($_SESSION['first_name'], 0, 1) . substr($_SESSION['last_name'], 0, 1)); ?>
+      <div class="hr-avatar">
+        <?php echo strtoupper(substr($company['company_name'], 0, 2)); ?>
       </div>
-      <div class="user-info">
-        <h3><?php echo htmlspecialchars($_SESSION['first_name'] . ' ' . $_SESSION['last_name']); ?></h3>
-        <span class="role-badge hr">HR Manager</span>
+      <h3><?php echo htmlspecialchars($company['company_name'] ?? 'HR Manager'); ?></h3>
+      <span class="role-badge hr">HR Manager</span>
       </div>
-    </div>
 
     <nav class="sidebar-nav">
-      <a href="index.php" class="nav-item">
-        <i class="fas fa-home"></i>
+      <a href="<?php echo BASE_URL; ?>/hr/index.php" class="nav-item">
+        <i class="fas fa-tachometer-alt"></i>
         <span>Dashboard</span>
       </a>
-      <a href="post-job.php" class="nav-item">
-        <i class="fas fa-plus-circle"></i>
-        <span>Post a Job</span>
+      <a href="<?php echo BASE_URL; ?>/hr/jobs.php" class="nav-item">
+        <i class="fas fa-briefcase"></i>
+        <span>My Jobs</span>
       </a>
-      <a href="applications.php" class="nav-item">
-        <i class="fas fa-users"></i>
+      <a href="<?php echo BASE_URL; ?>/hr/post-job.php" class="nav-item">
+        <i class="fas fa-plus-circle"></i>
+        <span>Post New Job</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/applications.php" class="nav-item">
+        <i class="fas fa-file-alt"></i>
         <span>Applications</span>
       </a>
-      <a href="calendar.php" class="nav-item">
+      <a href="<?php echo BASE_URL; ?>/hr/calendar.php" class="nav-item">
         <i class="fas fa-calendar-alt"></i>
         <span>Calendar</span>
       </a>
-      <a href="company.php" class="nav-item active">
+      <a href="<?php echo BASE_URL; ?>/hr/company.php" class="nav-item active">
         <i class="fas fa-building"></i>
-        <span>Company</span>
+        <span>Company Profile</span>
       </a>
     </nav>
+
+    <div class="sidebar-footer">
+      <a href="<?php echo BASE_URL; ?>/auth/logout.php" class="logout-btn">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+  </a>
+</div>
   </aside>
 
   <!-- Main Content -->
   <main class="dashboard-main">
     <div class="dashboard-header">
-      <div>
-        <h1>Company Settings</h1>
-        <p class="subtitle">Manage your company profile and branding</p>
+      <div class="header-left">
+        <h1><i class="fas fa-building"></i> Company Settings</h1>
+        <p>Manage your company profile and branding</p>
       </div>
-      <a href="../companies/profile.php?id=<?php echo $company['id']; ?>" target="_blank" class="btn btn-outline">
-        <i class="fas fa-external-link-alt"></i> View Public Profile
-      </a>
+      <div class="header-right">
+        <a href="../companies/profile.php?id=<?php echo $company['id']; ?>" target="_blank" class="btn btn-outline">
+          <i class="fas fa-external-link-alt"></i> View Public Profile
+        </a>
+      </div>
     </div>
 
     <?php if ($message): ?>
@@ -285,10 +295,10 @@ include '../includes/header.php';
           <div class="current-logo">
             <?php if ($company['logo']): ?>
               <img src="../uploads/logos/<?php echo htmlspecialchars($company['logo']); ?>"
-                alt="<?php echo htmlspecialchars($company['name']); ?>">
+                alt="<?php echo htmlspecialchars($company['company_name']); ?>">
             <?php else: ?>
               <div class="placeholder-logo">
-                <?php echo strtoupper(substr($company['name'], 0, 2)); ?>
+                <?php echo strtoupper(substr($company['company_name'], 0, 2)); ?>
               </div>
             <?php endif; ?>
           </div>
@@ -319,7 +329,7 @@ include '../includes/header.php';
             <div class="form-group">
               <label for="name">Company Name *</label>
               <input type="text" id="name" name="name" required
-                value="<?php echo htmlspecialchars($company['name']); ?>">
+                value="<?php echo htmlspecialchars($company['company_name']); ?>">
             </div>
             <div class="form-group">
               <label for="industry">Industry</label>
@@ -360,9 +370,9 @@ include '../includes/header.php';
           </div>
 
           <div class="form-group">
-            <label for="location">Headquarters Location</label>
-            <input type="text" id="location" name="location" placeholder="City, Country"
-              value="<?php echo htmlspecialchars($company['location'] ?? ''); ?>">
+            <label for="headquarters">Headquarters Location</label>
+            <input type="text" id="headquarters" name="headquarters" placeholder="City, Country"
+              value="<?php echo htmlspecialchars($company['headquarters'] ?? ''); ?>">
           </div>
 
           <div class="form-row">

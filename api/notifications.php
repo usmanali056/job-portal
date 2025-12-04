@@ -6,7 +6,6 @@
 
 header('Content-Type: application/json');
 
-session_start();
 require_once '../config/config.php';
 require_once '../classes/Database.php';
 

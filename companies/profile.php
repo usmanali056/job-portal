@@ -4,30 +4,29 @@
  * Public view of company details and job listings
  */
 
-session_start();
 require_once '../config/config.php';
 require_once '../classes/Database.php';
 require_once '../classes/Company.php';
 require_once '../classes/Job.php';
 
 $db = Database::getInstance()->getConnection();
-$companyModel = new Company($db);
-$jobModel = new Job($db);
+$companyModel = new Company();
+$jobModel = new Job();
 
 // Get company ID from URL
 $companyId = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
 if (!$companyId) {
-  header('Location: ../index.php');
+  header('Location: ' . BASE_URL . '/companies/');
   exit;
 }
 
 // Get company details
-$company = $companyModel->getById($companyId);
+$company = $companyModel->findById($companyId);
 
-if (!$company || !$company['is_verified']) {
+if (!$company || $company['verification_status'] !== 'verified') {
   // Show 404 or redirect
-  header('Location: ../index.php');
+  header('Location: ' . BASE_URL . '/companies/');
   exit;
 }
 
@@ -48,7 +47,7 @@ $stmt->execute([$companyId]);
 $totalActiveJobs = $stmt->fetchColumn();
 
 $stmt = $db->prepare("
-    SELECT COUNT(DISTINCT a.user_id) 
+    SELECT COUNT(DISTINCT a.seeker_id) 
     FROM applications a 
     JOIN jobs j ON a.job_id = j.id 
     WHERE j.company_id = ?
@@ -67,7 +66,7 @@ if (isset($_SESSION['user_id']) && $_SESSION['role'] === ROLE_SEEKER) {
   $savedJobs = $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
-$pageTitle = htmlspecialchars($company['name']) . " - JobNexus";
+$pageTitle = htmlspecialchars($company['company_name']) . " - JobNexus";
 include '../includes/header.php';
 ?>
 
@@ -78,10 +77,10 @@ include '../includes/header.php';
       <div class="company-hero-content">
         <div class="company-logo-large">
           <?php if ($company['logo']): ?>
-            <img src="../uploads/logos/<?php echo htmlspecialchars($company['logo']); ?>"
-              alt="<?php echo htmlspecialchars($company['name']); ?>">
+            <img src="<?php echo BASE_URL; ?>/uploads/logos/<?php echo htmlspecialchars($company['logo']); ?>"
+              alt="<?php echo htmlspecialchars($company['company_name']); ?>">
           <?php else: ?>
-            <span><?php echo strtoupper(substr($company['name'], 0, 2)); ?></span>
+            <span><?php echo strtoupper(substr($company['company_name'], 0, 2)); ?></span>
           <?php endif; ?>
         </div>
         <div class="company-hero-info">
@@ -93,10 +92,10 @@ include '../includes/header.php';
               <span class="industry-badge"><?php echo htmlspecialchars($company['industry']); ?></span>
             <?php endif; ?>
           </div>
-          <h1><?php echo htmlspecialchars($company['name']); ?></h1>
+          <h1><?php echo htmlspecialchars($company['company_name']); ?></h1>
           <div class="company-meta">
-            <?php if ($company['location']): ?>
-              <span><i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($company['location']); ?></span>
+            <?php if ($company['headquarters']): ?>
+              <span><i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($company['headquarters']); ?></span>
             <?php endif; ?>
             <?php if ($company['website']): ?>
               <a href="<?php echo htmlspecialchars($company['website']); ?>" target="_blank">
@@ -129,7 +128,7 @@ include '../includes/header.php';
       <div class="company-main">
         <!-- About Section -->
         <section class="glass-card company-section">
-          <h2><i class="fas fa-building"></i> About <?php echo htmlspecialchars($company['name']); ?></h2>
+          <h2><i class="fas fa-building"></i> About <?php echo htmlspecialchars($company['company_name']); ?></h2>
           <div class="about-content">
             <?php if ($company['description']): ?>
               <?php echo nl2br(htmlspecialchars($company['description'])); ?>
@@ -157,7 +156,7 @@ include '../includes/header.php';
               <?php foreach ($activeJobs as $job): ?>
                 <?php
                 $isSaved = in_array($job['id'], $savedJobs);
-                $deadline = $job['deadline'] ? new DateTime($job['deadline']) : null;
+                $deadline = $job['application_deadline'] ? new DateTime($job['application_deadline']) : null;
                 $daysLeft = $deadline ? (new DateTime())->diff($deadline)->days : null;
                 ?>
                 <div class="job-list-item">
@@ -252,12 +251,12 @@ include '../includes/header.php';
                 </div>
               </li>
             <?php endif; ?>
-            <?php if ($company['location']): ?>
+            <?php if ($company['headquarters']): ?>
               <li>
                 <i class="fas fa-map-marker-alt"></i>
                 <div>
                   <strong>Headquarters</strong>
-                  <span><?php echo htmlspecialchars($company['location']); ?></span>
+                  <span><?php echo htmlspecialchars($company['headquarters']); ?></span>
                 </div>
               </li>
             <?php endif; ?>
@@ -290,23 +289,20 @@ include '../includes/header.php';
         </div>
 
         <!-- Social Links -->
-        <?php if ($company['linkedin'] || $company['twitter'] || $company['facebook']): ?>
+        <?php if (($company['social_linkedin'] ?? null) || ($company['social_twitter'] ?? null)): ?>
           <div class="glass-card sidebar-card">
             <h3>Follow Us</h3>
             <div class="social-links">
-              <?php if ($company['linkedin']): ?>
-                <a href="<?php echo htmlspecialchars($company['linkedin']); ?>" target="_blank" class="social-btn linkedin">
+              <?php if ($company['social_linkedin'] ?? null): ?>
+                <a href="<?php echo htmlspecialchars($company['social_linkedin']); ?>" target="_blank"
+                  class="social-btn linkedin">
                   <i class="fab fa-linkedin"></i>
                 </a>
               <?php endif; ?>
-              <?php if ($company['twitter']): ?>
-                <a href="<?php echo htmlspecialchars($company['twitter']); ?>" target="_blank" class="social-btn twitter">
+              <?php if ($company['social_twitter'] ?? null): ?>
+                <a href="<?php echo htmlspecialchars($company['social_twitter']); ?>" target="_blank"
+                  class="social-btn twitter">
                   <i class="fab fa-twitter"></i>
-                </a>
-              <?php endif; ?>
-              <?php if ($company['facebook']): ?>
-                <a href="<?php echo htmlspecialchars($company['facebook']); ?>" target="_blank" class="social-btn facebook">
-                  <i class="fab fa-facebook"></i>
                 </a>
               <?php endif; ?>
             </div>
@@ -316,9 +312,9 @@ include '../includes/header.php';
         <!-- Similar Companies -->
         <?php
         $stmt = $db->prepare("
-                    SELECT id, name, logo, location 
+                    SELECT id, company_name, logo, headquarters 
                     FROM companies 
-                    WHERE is_verified = 1 AND id != ? AND industry = ?
+                    WHERE verification_status = 'verified' AND id != ? AND industry = ?
                     LIMIT 3
                 ");
         $stmt->execute([$companyId, $company['industry']]);
@@ -332,14 +328,15 @@ include '../includes/header.php';
                 <a href="profile.php?id=<?php echo $similar['id']; ?>" class="similar-company-item">
                   <div class="company-logo-small">
                     <?php if ($similar['logo']): ?>
-                      <img src="../uploads/logos/<?php echo htmlspecialchars($similar['logo']); ?>" alt="">
+                      <img src="<?php echo BASE_URL; ?>/uploads/logos/<?php echo htmlspecialchars($similar['logo']); ?>"
+                        alt="">
                     <?php else: ?>
-                      <?php echo strtoupper(substr($similar['name'], 0, 2)); ?>
+                      <?php echo strtoupper(substr($similar['company_name'], 0, 2)); ?>
                     <?php endif; ?>
                   </div>
                   <div class="company-mini-info">
-                    <strong><?php echo htmlspecialchars($similar['name']); ?></strong>
-                    <span><?php echo htmlspecialchars($similar['location'] ?? 'Location not specified'); ?></span>
+                    <strong><?php echo htmlspecialchars($similar['company_name']); ?></strong>
+                    <span><?php echo htmlspecialchars($similar['headquarters'] ?? 'Location not specified'); ?></span>
                   </div>
                 </a>
               <?php endforeach; ?>
@@ -352,35 +349,74 @@ include '../includes/header.php';
 </div>
 
 <style>
+  /* =====================================================
+     Company Profile - Using Global Theme Variables
+     ===================================================== */
   .company-profile-page {
     min-height: 100vh;
-    padding-bottom: 4rem;
+    padding-top: 70px;
+    background: var(--bg-primary);
   }
 
+  /* Hero Section */
   .company-hero {
-    background: linear-gradient(135deg, rgba(0, 230, 118, 0.15) 0%, rgba(0, 230, 118, 0.02) 100%);
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
     padding: 4rem 0;
     margin-bottom: 3rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .company-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0, 230, 118, 0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .company-hero::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(64, 196, 255, 0.04) 0%, transparent 70%);
+    pointer-events: none;
   }
 
   .company-hero-content {
     display: flex;
     align-items: flex-start;
-    gap: 2rem;
+    gap: 2.5rem;
+    position: relative;
+    z-index: 1;
   }
 
   .company-logo-large {
-    width: 120px;
-    height: 120px;
-    border-radius: 1rem;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.1);
+    width: 130px;
+    height: 130px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     flex-shrink: 0;
+    box-shadow: var(--shadow-lg);
+    transition: all var(--transition-normal);
+  }
+
+  .company-logo-large:hover {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-glow);
+    border-color: var(--accent-primary);
   }
 
   .company-logo-large img {
@@ -390,48 +426,58 @@ include '../includes/header.php';
   }
 
   .company-logo-large span {
+    font-family: var(--font-heading);
     font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--primary-color);
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .company-badges {
     display: flex;
     gap: 0.75rem;
-    margin-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
   }
 
   .verified-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.375rem 0.75rem;
-    background: rgba(0, 230, 118, 0.2);
-    color: var(--primary-color);
-    border-radius: 2rem;
-    font-size: 0.75rem;
+    padding: 0.5rem 1rem;
+    background: rgba(0, 230, 118, 0.15);
+    color: var(--accent-primary);
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
     font-weight: 600;
+    border: 1px solid rgba(0, 230, 118, 0.25);
   }
 
   .industry-badge {
-    padding: 0.375rem 0.75rem;
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.8);
-    border-radius: 2rem;
-    font-size: 0.75rem;
+    padding: 0.5rem 1rem;
+    background: rgba(64, 196, 255, 0.15);
+    color: var(--info);
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: 1px solid rgba(64, 196, 255, 0.2);
   }
 
   .company-hero-info h1 {
     font-size: 2.5rem;
-    margin: 0 0 1rem;
+    margin: 0 0 1.25rem;
     color: var(--text-primary);
+    font-family: var(--font-heading);
+    letter-spacing: 0.02em;
+    line-height: 1.2;
   }
 
   .company-meta {
     display: flex;
     flex-wrap: wrap;
     gap: 1.5rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
   }
 
   .company-meta span,
@@ -439,45 +485,71 @@ include '../includes/header.php';
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.95rem;
+    color: var(--text-secondary);
     text-decoration: none;
+    transition: color var(--transition-fast);
   }
 
   .company-meta a:hover {
-    color: var(--primary-color);
+    color: var(--accent-primary);
   }
 
   .company-meta i {
-    color: var(--primary-color);
+    color: var(--accent-primary);
+    font-size: 0.9rem;
   }
 
   .company-stats-mini {
     display: flex;
-    gap: 2rem;
+    gap: 3rem;
   }
 
   .stat-item {
-    text-align: center;
+    text-align: left;
   }
 
   .stat-value {
     display: block;
-    font-size: 1.75rem;
+    font-size: 2.25rem;
     font-weight: 700;
-    color: var(--primary-color);
+    font-family: var(--font-heading);
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.2;
   }
 
   .stat-label {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   /* Content Grid */
   .company-content-grid {
     display: grid;
-    grid-template-columns: 1fr 350px;
-    gap: 2rem;
+    grid-template-columns: 1fr 380px;
+    gap: 2.5rem;
+    padding-bottom: 4rem;
+  }
+
+  /* Glass Card */
+  .glass-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    border: 1px solid var(--border-color);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    transition: all var(--transition-normal);
+  }
+
+  .glass-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow-md);
   }
 
   .company-section {
@@ -488,23 +560,28 @@ include '../includes/header.php';
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-size: 1.25rem;
+    font-size: 1.35rem;
+    font-family: var(--font-heading);
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
   }
 
   .company-section h2 i {
-    color: var(--primary-color);
+    color: var(--accent-primary);
+    font-size: 1.1rem;
   }
 
   .about-content {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--text-secondary);
     line-height: 1.8;
+    font-size: 0.95rem;
   }
 
   .placeholder-text {
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
     font-style: italic;
   }
 
@@ -514,7 +591,7 @@ include '../includes/header.php';
     align-items: center;
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--border-color);
   }
 
   .section-header h2 {
@@ -524,12 +601,13 @@ include '../includes/header.php';
   }
 
   .job-count {
-    padding: 0.375rem 0.75rem;
-    background: rgba(0, 230, 118, 0.2);
-    color: var(--primary-color);
-    border-radius: 2rem;
-    font-size: 0.75rem;
+    padding: 0.4rem 1rem;
+    background: rgba(0, 230, 118, 0.15);
+    color: var(--accent-primary);
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
     font-weight: 600;
+    border: 1px solid rgba(0, 230, 118, 0.25);
   }
 
   /* Jobs List */
@@ -543,37 +621,58 @@ include '../includes/header.php';
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1.25rem;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: all 0.3s ease;
+    padding: 1.5rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    transition: all var(--transition-normal);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .job-list-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: var(--accent-gradient);
+    opacity: 0;
+    transition: opacity var(--transition-normal);
   }
 
   .job-list-item:hover {
-    border-color: rgba(0, 230, 118, 0.3);
-    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent-primary);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .job-list-item:hover::before {
+    opacity: 1;
   }
 
   .job-main-info h3 {
-    margin: 0 0 0.5rem;
+    margin: 0 0 0.75rem;
     font-size: 1.1rem;
+    font-family: var(--font-body);
+    font-weight: 600;
   }
 
   .job-main-info h3 a {
     color: var(--text-primary);
     text-decoration: none;
-    transition: color 0.3s ease;
+    transition: color var(--transition-fast);
   }
 
   .job-main-info h3 a:hover {
-    color: var(--primary-color);
+    color: var(--accent-primary);
   }
 
   .job-details {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: 1.25rem;
     margin-bottom: 0.75rem;
   }
 
@@ -581,80 +680,133 @@ include '../includes/header.php';
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+
+  .job-details span i {
     font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-muted);
+  }
+
+  .job-type {
+    font-weight: 500;
   }
 
   .job-type.full-time {
-    color: var(--primary-color);
+    color: var(--accent-primary) !important;
   }
 
   .job-type.part-time {
-    color: #64b5f6;
+    color: var(--info) !important;
   }
 
   .job-type.contract {
-    color: #ffc107;
+    color: var(--warning) !important;
   }
 
   .job-type.remote {
-    color: #ba68c8;
+    color: #ce93d8 !important;
+  }
+
+  .job-type.internship {
+    color: #4DD0E1 !important;
   }
 
   .salary {
-    color: var(--primary-color) !important;
+    color: var(--accent-primary) !important;
     font-weight: 600;
   }
 
   .job-tags {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
   }
 
   .job-tags span {
-    padding: 0.25rem 0.5rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 0.25rem;
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.6);
+    padding: 0.35rem 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
   }
 
   .job-actions {
     display: flex;
     align-items: center;
     gap: 1rem;
+    flex-shrink: 0;
   }
 
   .deadline {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
   }
 
   .deadline.urgent {
-    color: #ffc107;
+    color: var(--warning);
   }
 
   .save-btn {
-    width: 36px;
-    height: 36px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    color: rgba(255, 255, 255, 0.5);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all var(--transition-normal);
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  .save-btn.active {
-    color: #ff6b6b;
-    background: rgba(255, 107, 107, 0.2);
+  .save-btn:hover {
+    border-color: var(--error);
+    color: var(--error);
+    transform: scale(1.1);
   }
 
-  .save-btn:hover {
-    transform: scale(1.1);
+  .save-btn.active {
+    color: var(--error);
+    background: rgba(255, 82, 82, 0.15);
+    border-color: rgba(255, 82, 82, 0.3);
+  }
+
+  .btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: none;
+    transition: all var(--transition-normal);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+
+  .btn-primary {
+    background: var(--accent-gradient);
+    color: var(--text-inverse);
+    box-shadow: var(--accent-glow);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(0, 230, 118, 0.4);
+    color: var(--text-inverse);
+  }
+
+  .btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
   }
 
   /* Sidebar */
@@ -664,10 +816,15 @@ include '../includes/header.php';
 
   .sidebar-card h3 {
     font-size: 1rem;
-    margin-bottom: 1rem;
+    font-family: var(--font-heading);
+    margin-bottom: 1.25rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    letter-spacing: 0.02em;
   }
 
   .info-list {
@@ -680,18 +837,24 @@ include '../includes/header.php';
     display: flex;
     align-items: flex-start;
     gap: 1rem;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .info-list li:last-child {
     border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .info-list li:first-child {
+    padding-top: 0;
   }
 
   .info-list li i {
-    color: var(--primary-color);
+    color: var(--accent-primary);
     width: 20px;
-    margin-top: 0.25rem;
+    margin-top: 0.15rem;
+    font-size: 0.95rem;
   }
 
   .info-list li div {
@@ -701,13 +864,16 @@ include '../includes/header.php';
   .info-list li strong {
     display: block;
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
-    margin-bottom: 0.25rem;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
   }
 
   .info-list li span {
     color: var(--text-primary);
-    font-size: 0.9rem;
+    font-size: 0.95rem;
   }
 
   .contact-links {
@@ -719,21 +885,34 @@ include '../includes/header.php';
   .contact-link {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 0.5rem;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
     color: var(--text-primary);
     text-decoration: none;
-    transition: all 0.3s ease;
+    transition: all var(--transition-normal);
+    border: 1px solid var(--border-color);
   }
 
   .contact-link:hover {
-    background: rgba(0, 230, 118, 0.1);
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    transform: translateX(5px);
+    color: var(--accent-primary);
   }
 
   .contact-link i {
-    color: var(--primary-color);
+    color: var(--accent-primary);
+    width: 20px;
+    text-align: center;
+  }
+
+  .contact-link span {
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .social-links {
@@ -742,31 +921,34 @@ include '../includes/header.php';
   }
 
   .social-btn {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
     text-decoration: none;
-    transition: transform 0.3s ease;
+    transition: all var(--transition-normal);
+    font-size: 1.1rem;
   }
 
   .social-btn:hover {
-    transform: scale(1.1);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    color: white;
   }
 
   .social-btn.linkedin {
-    background: #0077b5;
+    background: linear-gradient(135deg, #0077b5, #005885);
   }
 
   .social-btn.twitter {
-    background: #1da1f2;
+    background: linear-gradient(135deg, #1da1f2, #0d8ddb);
   }
 
   .social-btn.facebook {
-    background: #1877f2;
+    background: linear-gradient(135deg, #1877f2, #0d65d9);
   }
 
   .similar-companies-list {
@@ -778,30 +960,35 @@ include '../includes/header.php';
   .similar-company-item {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 0.5rem;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
     text-decoration: none;
-    transition: all 0.3s ease;
+    transition: all var(--transition-normal);
+    border: 1px solid var(--border-color);
   }
 
   .similar-company-item:hover {
-    background: rgba(0, 230, 118, 0.1);
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    transform: translateX(5px);
   }
 
   .company-logo-small {
-    width: 40px;
-    height: 40px;
-    border-radius: 0.5rem;
-    background: rgba(255, 255, 255, 0.1);
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    font-size: 0.75rem;
-    color: var(--primary-color);
-    font-weight: 600;
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    color: var(--accent-primary);
+    flex-shrink: 0;
   }
 
   .company-logo-small img {
@@ -813,34 +1000,38 @@ include '../includes/header.php';
   .company-mini-info strong {
     display: block;
     color: var(--text-primary);
-    font-size: 0.875rem;
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
   }
 
   .company-mini-info span {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+    color: var(--text-muted);
   }
 
   /* Empty State */
   .empty-state {
     text-align: center;
-    padding: 3rem;
+    padding: var(--spacing-3xl) var(--spacing-xl);
   }
 
   .empty-state i {
-    font-size: 3rem;
-    color: rgba(255, 255, 255, 0.2);
-    margin-bottom: 1rem;
+    font-size: 4rem;
+    color: var(--accent-primary);
+    opacity: 0.25;
+    margin-bottom: 1.5rem;
+    display: block;
   }
 
   .empty-state p {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-secondary);
     margin: 0;
+    font-size: 1.1rem;
   }
 
   .empty-state .subtext {
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 0.875rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
     margin-top: 0.5rem;
   }
 
@@ -862,10 +1053,27 @@ include '../includes/header.php';
   }
 
   @media (max-width: 768px) {
+    .company-hero {
+      padding: 3rem 0;
+    }
+
     .company-hero-content {
       flex-direction: column;
       align-items: center;
       text-align: center;
+    }
+
+    .company-logo-large {
+      width: 120px;
+      height: 120px;
+    }
+
+    .company-hero-info h1 {
+      font-size: 2rem;
+    }
+
+    .company-badges {
+      justify-content: center;
     }
 
     .company-meta {
@@ -883,12 +1091,26 @@ include '../includes/header.php';
     .job-list-item {
       flex-direction: column;
       align-items: flex-start;
-      gap: 1rem;
+      gap: 1.25rem;
     }
 
     .job-actions {
       width: 100%;
-      justify-content: flex-end;
+      justify-content: space-between;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .company-hero-info h1 {
+      font-size: 1.75rem;
+    }
+
+    .stat-value {
+      font-size: 1.75rem;
+    }
+
+    .company-stats-mini {
+      gap: 2rem;
     }
   }
 </style>

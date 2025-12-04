@@ -118,10 +118,13 @@ class Job
     $where = ["j.status = 'active'", "c.verification_status = 'verified'"];
     $params = [];
 
-    // Search filter
+    // Search filter - use separate placeholders for each occurrence
     if (!empty($filters['search'])) {
-      $where[] = "(j.title LIKE :search OR j.description LIKE :search OR c.company_name LIKE :search)";
-      $params['search'] = '%' . $filters['search'] . '%';
+      $where[] = "(j.title LIKE :search1 OR j.description LIKE :search2 OR c.company_name LIKE :search3)";
+      $searchTerm = '%' . $filters['search'] . '%';
+      $params['search1'] = $searchTerm;
+      $params['search2'] = $searchTerm;
+      $params['search3'] = $searchTerm;
     }
 
     // Category filter
@@ -180,7 +183,12 @@ class Job
                      LEFT JOIN companies c ON j.company_id = c.id
                      WHERE $whereClause";
     $stmt = $this->db->prepare($countSql);
-    $stmt->execute($params);
+
+    // Bind count query parameters
+    foreach ($params as $key => $value) {
+      $stmt->bindValue(':' . $key, $value);
+    }
+    $stmt->execute();
     $total = $stmt->fetchColumn();
 
     // Get jobs
@@ -195,10 +203,10 @@ class Job
 
     $stmt = $this->db->prepare($sql);
     foreach ($params as $key => $value) {
-      $stmt->bindValue($key, $value);
+      $stmt->bindValue(':' . $key, $value);
     }
-    $stmt->bindValue('limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue('offset', $offset, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $stmt->execute();
 
     $jobs = $stmt->fetchAll();

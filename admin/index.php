@@ -12,36 +12,38 @@ require_once '../classes/Company.php';
 require_once '../classes/Application.php';
 
 // Check authentication and role
-session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] !== ROLE_ADMIN) {
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_ADMIN) {
   header('Location: ' . BASE_URL . '/auth/login.php?redirect=admin');
   exit;
 }
 
 $db = Database::getInstance()->getConnection();
-$userModel = new User($db);
-$jobModel = new Job($db);
-$companyModel = new Company($db);
-$applicationModel = new Application($db);
+$userModel = new User();
+$jobModel = new Job();
+$companyModel = new Company();
+$applicationModel = new Application();
 
 // Get current admin info
 $admin = $userModel->findById($_SESSION['user_id']);
 
 // Dashboard Statistics
 // Total Users
-$stmt = $db->query("SELECT COUNT(*) as total FROM users WHERE role_id != " . ROLE_ADMIN);
+$stmt = $db->query("SELECT COUNT(*) as total FROM users WHERE role != '" . ROLE_ADMIN . "'");
 $totalUsers = $stmt->fetch()['total'];
 
 // Total Seekers
-$stmt = $db->query("SELECT COUNT(*) as total FROM users WHERE role_id = " . ROLE_SEEKER);
+$stmt = $db->query("SELECT COUNT(*) as total FROM users WHERE role = '" . ROLE_SEEKER . "'");
 $totalSeekers = $stmt->fetch()['total'];
 
 // Total HR/Recruiters
-$stmt = $db->query("SELECT COUNT(*) as total FROM users WHERE role_id = " . ROLE_HR);
+$stmt = $db->query("SELECT COUNT(*) as total FROM users WHERE role = '" . ROLE_HR . "'");
 $totalHR = $stmt->fetch()['total'];
 
-// Pending HR Verifications
-$stmt = $db->query("SELECT COUNT(*) as total FROM users WHERE role_id = " . ROLE_HR . " AND is_verified = 0");
+// Pending HR Verifications (based on company verification status)
+$stmt = $db->query("SELECT COUNT(*) as total FROM companies WHERE verification_status = 'pending'");
 $pendingVerifications = $stmt->fetch()['total'];
 
 // Total Jobs
@@ -49,7 +51,7 @@ $stmt = $db->query("SELECT COUNT(*) as total FROM jobs");
 $totalJobs = $stmt->fetch()['total'];
 
 // Active Jobs
-$stmt = $db->query("SELECT COUNT(*) as total FROM jobs WHERE status = 'active' AND deadline >= CURDATE()");
+$stmt = $db->query("SELECT COUNT(*) as total FROM jobs WHERE status = 'active' AND (application_deadline IS NULL OR application_deadline >= CURDATE())");
 $activeJobs = $stmt->fetch()['total'];
 
 // Total Applications
@@ -61,7 +63,7 @@ $stmt = $db->query("SELECT COUNT(*) as total FROM companies");
 $totalCompanies = $stmt->fetch()['total'];
 
 // Verified Companies
-$stmt = $db->query("SELECT COUNT(*) as total FROM companies WHERE is_verified = 1");
+$stmt = $db->query("SELECT COUNT(*) as total FROM companies WHERE verification_status = 'verified'");
 $verifiedCompanies = $stmt->fetch()['total'];
 
 // New Users This Week
@@ -72,25 +74,24 @@ $newUsersWeek = $stmt->fetch()['total'];
 $stmt = $db->query("SELECT COUNT(*) as total FROM applications WHERE applied_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
 $newAppsWeek = $stmt->fetch()['total'];
 
-// Pending HR Requests (for verification)
-$stmt = $db->prepare("
-    SELECT u.*, c.name as company_name, c.id as company_id 
-    FROM users u 
-    LEFT JOIN companies c ON u.company_id = c.id 
-    WHERE u.role_id = ? AND u.is_verified = 0 
-    ORDER BY u.created_at DESC 
+// Pending Company Verifications
+$stmt = $db->query("
+    SELECT c.*, u.email as hr_email 
+    FROM companies c 
+    JOIN users u ON c.hr_user_id = u.id 
+    WHERE c.verification_status = 'pending' 
+    ORDER BY c.created_at DESC 
     LIMIT 10
 ");
-$stmt->execute([ROLE_HR]);
 $pendingHRRequests = $stmt->fetchAll();
 
 // Recent Users
 $stmt = $db->query("
     SELECT u.*, 
            CASE 
-               WHEN u.role_id = 1 THEN 'Admin'
-               WHEN u.role_id = 2 THEN 'HR'
-               WHEN u.role_id = 3 THEN 'Seeker'
+               WHEN u.role = 'admin' THEN 'Admin'
+               WHEN u.role = 'hr' THEN 'HR'
+               WHEN u.role = 'seeker' THEN 'Seeker'
            END as role_name
     FROM users u 
     ORDER BY u.created_at DESC 
@@ -100,7 +101,7 @@ $recentUsers = $stmt->fetchAll();
 
 // Recent Jobs
 $stmt = $db->query("
-    SELECT j.*, c.name as company_name 
+    SELECT j.*, c.company_name 
     FROM jobs j 
     LEFT JOIN companies c ON j.company_id = c.id 
     ORDER BY j.created_at DESC 
@@ -123,32 +124,59 @@ $messageType = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $action = $_POST['action'] ?? '';
 
-  if ($action === 'verify_hr') {
-    $userId = (int) $_POST['user_id'];
-    $stmt = $db->prepare("UPDATE users SET is_verified = 1 WHERE id = ? AND role_id = ?");
-    if ($stmt->execute([$userId, ROLE_HR])) {
-      $message = 'HR account verified successfully!';
-      $messageType = 'success';
-      // Refresh pending list
-      header('Location: ' . $_SERVER['PHP_SELF'] . '?verified=1');
-      exit;
+  if ($action === 'verify_company' || $action === 'verify_hr') {
+    $companyId = (int) ($_POST['company_id'] ?? 0);
+
+    // If user_id is passed instead, get the company for that HR user
+    if (!$companyId && isset($_POST['user_id'])) {
+      $userId = (int) $_POST['user_id'];
+      $stmt = $db->prepare("SELECT id FROM companies WHERE hr_user_id = ?");
+      $stmt->execute([$userId]);
+      $companyRow = $stmt->fetch();
+      $companyId = $companyRow ? $companyRow['id'] : 0;
     }
-  } elseif ($action === 'reject_hr') {
-    $userId = (int) $_POST['user_id'];
-    $stmt = $db->prepare("DELETE FROM users WHERE id = ? AND role_id = ? AND is_verified = 0");
-    if ($stmt->execute([$userId, ROLE_HR])) {
-      $message = 'HR account rejected and removed.';
-      $messageType = 'warning';
-      header('Location: ' . $_SERVER['PHP_SELF'] . '?rejected=1');
-      exit;
+
+    if ($companyId) {
+      $stmt = $db->prepare("UPDATE companies SET verification_status = 'verified', verified_at = NOW() WHERE id = ?");
+      if ($stmt->execute([$companyId])) {
+        // Also verify the HR user (hr_user_id is in companies table, not company_id in users)
+        $stmt = $db->prepare("UPDATE users SET is_verified = 1 WHERE id IN (SELECT hr_user_id FROM companies WHERE id = ?)");
+        $stmt->execute([$companyId]);
+
+        $message = 'Company verified successfully!';
+        $messageType = 'success';
+        header('Location: ' . $_SERVER['PHP_SELF'] . '?verified=1');
+        exit;
+      }
     }
-  } elseif ($action === 'verify_company') {
+  } elseif ($action === 'reject_company' || $action === 'reject_hr') {
+    $companyId = (int) ($_POST['company_id'] ?? 0);
+    $reason = sanitize($_POST['reason'] ?? 'Application rejected by administrator');
+
+    // If user_id is passed instead, get the company for that HR user
+    if (!$companyId && isset($_POST['user_id'])) {
+      $userId = (int) $_POST['user_id'];
+      $stmt = $db->prepare("SELECT id FROM companies WHERE hr_user_id = ?");
+      $stmt->execute([$userId]);
+      $companyRow = $stmt->fetch();
+      $companyId = $companyRow ? $companyRow['id'] : 0;
+    }
+
+    if ($companyId) {
+      $stmt = $db->prepare("UPDATE companies SET verification_status = 'rejected', rejection_reason = ? WHERE id = ?");
+      if ($stmt->execute([$reason, $companyId])) {
+        $message = 'Company application rejected.';
+        $messageType = 'warning';
+        header('Location: ' . $_SERVER['PHP_SELF'] . '?rejected=1');
+        exit;
+      }
+    }
+  } elseif ($action === 'feature_company') {
     $companyId = (int) $_POST['company_id'];
-    $stmt = $db->prepare("UPDATE companies SET is_verified = 1 WHERE id = ?");
-    if ($stmt->execute([$companyId])) {
-      $message = 'Company verified successfully!';
-      $messageType = 'success';
-    }
+    $stmt = $db->prepare("UPDATE companies SET is_featured = 1 WHERE id = ?");
+    $stmt->execute([$companyId]);
+    $message = 'Company featured successfully!';
+    $messageType = 'success';
   } elseif ($action === 'delete_user') {
     $userId = (int) $_POST['user_id'];
     if ($userId !== $_SESSION['user_id']) {
@@ -186,9 +214,9 @@ require_once '../includes/header.php';
   <aside class="dashboard-sidebar">
     <div class="sidebar-header">
       <div class="admin-avatar">
-        <i class="fas fa-user-shield"></i>
+        <?php echo strtoupper(substr($_SESSION['user_email'] ?? 'A', 0, 1)); ?>
       </div>
-      <h3><?php echo htmlspecialchars($admin['full_name']); ?></h3>
+      <h3><?php echo htmlspecialchars($_SESSION['user_email'] ?? 'Admin'); ?></h3>
       <span class="role-badge admin">Administrator</span>
     </div>
 
@@ -208,13 +236,6 @@ require_once '../includes/header.php';
       <a href="<?php echo BASE_URL; ?>/admin/jobs.php" class="nav-item">
         <i class="fas fa-briefcase"></i>
         <span>All Jobs</span>
-      </a>
-      <a href="<?php echo BASE_URL; ?>/admin/verifications.php" class="nav-item">
-        <i class="fas fa-check-circle"></i>
-        <span>Verifications</span>
-        <?php if ($pendingVerifications > 0): ?>
-          <span class="badge"><?php echo $pendingVerifications; ?></span>
-        <?php endif; ?>
       </a>
       <a href="<?php echo BASE_URL; ?>/admin/reports.php" class="nav-item">
         <i class="fas fa-chart-bar"></i>
@@ -239,7 +260,7 @@ require_once '../includes/header.php';
     <div class="dashboard-header">
       <div class="header-left">
         <h1>Admin Dashboard</h1>
-        <p>Welcome back, <?php echo htmlspecialchars($admin['full_name']); ?>!</p>
+        <p>Welcome back, <?php echo htmlspecialchars($admin['email'] ?? 'Admin'); ?>!</p>
       </div>
       <div class="header-right">
         <span class="date-display">
@@ -352,57 +373,139 @@ require_once '../includes/header.php';
       <div class="dashboard-section verification-center">
         <div class="section-header">
           <h2><i class="fas fa-user-check"></i> Pending HR Verifications</h2>
-          <a href="<?php echo BASE_URL; ?>/admin/verifications.php" class="btn btn-outline-primary btn-sm">
-            View All
-          </a>
+          <span class="badge-count"><?php echo count($pendingHRRequests); ?> pending</span>
         </div>
 
         <div class="verification-cards">
           <?php foreach ($pendingHRRequests as $request): ?>
             <div class="verification-card">
               <div class="verification-header">
-                <div class="user-avatar">
-                  <i class="fas fa-user"></i>
+                <div class="company-logo-placeholder">
+                  <?php if (!empty($request['logo'])): ?>
+                    <img src="<?php echo BASE_URL; ?>/uploads/logos/<?php echo htmlspecialchars($request['logo']); ?>" alt="Logo">
+                  <?php else: ?>
+                    <i class="fas fa-building"></i>
+                  <?php endif; ?>
                 </div>
-                <div class="user-info">
-                  <h4><?php echo htmlspecialchars($request['full_name']); ?></h4>
-                  <p><?php echo htmlspecialchars($request['email']); ?></p>
+                <div class="company-info">
+                  <h4><?php echo htmlspecialchars($request['company_name'] ?? 'Unknown Company'); ?></h4>
+                  <p class="hr-email"><i class="fas fa-user"></i> <?php echo htmlspecialchars($request['hr_email'] ?? ''); ?></p>
                 </div>
+                <span class="pending-badge">
+                  <i class="fas fa-clock"></i> Pending
+                </span>
               </div>
 
               <div class="verification-details">
-                <div class="detail-item">
-                  <i class="fas fa-building"></i>
-                  <span><?php echo htmlspecialchars($request['company_name'] ?? 'No company'); ?></span>
+                <div class="detail-row">
+                  <div class="detail-item">
+                    <i class="fas fa-industry"></i>
+                    <span><strong>Industry:</strong> <?php echo htmlspecialchars($request['industry'] ?? 'Not specified'); ?></span>
+                    </div>
+                    <div class="detail-item">
+                      <i class="fas fa-users"></i>
+                      <span><strong>Size:</strong> <?php echo htmlspecialchars($request['company_size'] ?? 'Not specified'); ?></span>
+                    </div>
+                    </div>
+                    <div class="detail-row">
+                      <div class="detail-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span><strong>Location:</strong> <?php echo htmlspecialchars($request['headquarters'] ?? 'Not specified'); ?></span>
+                      </div>
+                      <div class="detail-item">
+                        <i class="fas fa-globe"></i>
+                        <span><strong>Website:</strong>
+                          <?php if (!empty($request['website'])): ?>
+                            <a href="<?php echo htmlspecialchars($request['website']); ?>"
+                              target="_blank"><?php echo htmlspecialchars($request['website']); ?></a>
+                          <?php else: ?>
+                            Not provided
+                          <?php endif; ?>
+                        </span>
+                      </div>
+                    </div>
+                    <div class="detail-row">
+                      <div class="detail-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span><strong>Registered:</strong>
+                          <?php echo date('M j, Y \a\t g:i A', strtotime($request['created_at'])); ?></span>
+                      </div>
+                      <div class="detail-item">
+                        <i class="fas fa-envelope"></i>
+                        <span><strong>Email:</strong>
+                          <?php echo htmlspecialchars($request['email'] ?? $request['hr_email'] ?? 'N/A'); ?></span>
+                      </div>
+                    </div>
+                <?php if (!empty($request['description'])): ?>
+                <div class="detail-row full-width">
+                    <div class="detail-item">
+                      <i class="fas fa-info-circle"></i>
+                      <span><strong>About:</strong>
+                        <?php echo htmlspecialchars(substr($request['description'], 0, 200)); ?>
+                        <?php echo strlen($request['description']) > 200 ? '...' : ''; ?></span>
+                      </div>
+                  </div>
+                <?php endif; ?>
                 </div>
-                <div class="detail-item">
-                  <i class="fas fa-calendar"></i>
-                  <span>Registered: <?php echo date('M j, Y', strtotime($request['created_at'])); ?></span>
-                </div>
-              </div>
 
               <div class="verification-actions">
-                <form method="POST" style="display: inline;">
-                  <input type="hidden" name="action" value="verify_hr">
-                  <input type="hidden" name="user_id" value="<?php echo $request['id']; ?>">
-                  <button type="submit" class="btn btn-success btn-sm">
-                    <i class="fas fa-check"></i> Verify
+                <form method="POST" class="action-form verify-form">
+                  <input type="hidden" name="action" value="verify_company">
+                  <input type="hidden" name="company_id" value="<?php echo $request['id']; ?>">
+                  <button type="submit" class="btn btn-success">
+                    <i class="fas fa-check-circle"></i> Verify Company
                   </button>
                 </form>
-                <form method="POST" style="display: inline;"
-                  onsubmit="return confirm('Are you sure you want to reject this HR account?');">
-                  <input type="hidden" name="action" value="reject_hr">
-                  <input type="hidden" name="user_id" value="<?php echo $request['id']; ?>">
-                  <button type="submit" class="btn btn-danger btn-sm">
-                    <i class="fas fa-times"></i> Reject
-                  </button>
-                </form>
+                <button type="button" class="btn btn-outline-danger" onclick="showRejectModal(<?php echo $request['id']; ?>, '<?php echo htmlspecialchars(addslashes($request['company_name'] ?? '')); ?>')">
+                  <i class="fas fa-times-circle"></i> Reject
+                </button>
+                <a href="<?php echo BASE_URL; ?>/companies/profile.php?id=<?php echo $request['id']; ?>" target="_blank"
+                  class="btn btn-outline-secondary">
+                  <i class="fas fa-external-link-alt"></i> View Profile
+                </a>
               </div>
             </div>
           <?php endforeach; ?>
         </div>
       </div>
+    <?php else: ?>
+    <div class="dashboard-section verification-center">
+      <div class="section-header">
+        <h2><i class="fas fa-user-check"></i> Pending HR Verifications</h2>
+      </div>
+      <div class="empty-state-small">
+        <i class="fas fa-check-double"></i>
+        <p>No pending verification requests. All caught up!</p>
+      </div>
+    </div>
     <?php endif; ?>
+
+    <!-- Reject Modal -->
+    <div class="modal-overlay" id="rejectModal" style="display: none;">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3><i class="fas fa-times-circle"></i> Reject Company</h3>
+          <button type="button" class="modal-close" onclick="hideRejectModal()">&times;</button>
+        </div>
+        <form method="POST" id="rejectForm">
+          <input type="hidden" name="action" value="reject_company">
+          <input type="hidden" name="company_id" id="reject_company_id" value="">
+          <div class="modal-body">
+            <p>You are about to reject: <strong id="reject_company_name"></strong></p>
+            <div class="form-group">
+              <label for="reason">Reason for Rejection <span class="required">*</span></label>
+              <textarea name="reason" id="reason" rows="4" class="form-control" required placeholder="Please provide a reason for rejecting this company registration..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="hideRejectModal()">Cancel</button>
+            <button type="submit" class="btn btn-danger">
+              <i class="fas fa-times"></i> Reject Company
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- Dashboard Panels -->
     <div class="dashboard-panels">
@@ -431,9 +534,9 @@ require_once '../includes/header.php';
                   <td>
                     <div class="user-cell">
                       <div class="avatar-sm">
-                        <?php echo strtoupper(substr($user['full_name'], 0, 1)); ?>
+                        <?php echo strtoupper(substr($user['email'], 0, 1)); ?>
                       </div>
-                      <?php echo htmlspecialchars($user['full_name']); ?>
+                      <?php echo htmlspecialchars($user['email']); ?>
                     </div>
                   </td>
                   <td><?php echo htmlspecialchars($user['email']); ?></td>
@@ -608,8 +711,8 @@ require_once '../includes/header.php';
   /* Sidebar */
   .dashboard-sidebar {
     width: 280px;
-    background: var(--card-bg);
-    border-right: 1px solid var(--border-color);
+    background: linear-gradient(180deg, #121212 0%, #0a0a0a 50%, #121212 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -620,7 +723,8 @@ require_once '../includes/header.php';
   .sidebar-header {
     padding: 2rem;
     text-align: center;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.3);
   }
 
   .admin-avatar {
@@ -678,7 +782,6 @@ require_once '../includes/header.php';
     color: var(--text-muted);
     text-decoration: none;
     transition: all 0.3s ease;
-    border-left: 3px solid transparent;
   }
 
   .nav-item:hover {
@@ -689,7 +792,6 @@ require_once '../includes/header.php';
   .nav-item.active {
     background: rgba(0, 230, 118, 0.1);
     color: var(--primary-color);
-    border-left-color: var(--primary-color);
   }
 
   .nav-item i {
@@ -765,8 +867,8 @@ require_once '../includes/header.php';
   /* Stats Grid */
   .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1.25rem;
     margin-bottom: 2rem;
   }
 
@@ -775,8 +877,9 @@ require_once '../includes/header.php';
     border-radius: 16px;
     padding: 1.5rem;
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
     gap: 1rem;
     border: 1px solid var(--border-color);
     transition: all 0.3s ease;
@@ -784,63 +887,70 @@ require_once '../includes/header.php';
 
   .stat-card:hover {
     transform: translateY(-5px);
+    border-color: rgba(0, 230, 118, 0.3);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   }
 
   .stat-icon {
-    width: 60px;
-    height: 60px;
+    width: 50px;
+    height: 50px;
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1.25rem;
+  }
+
+  .stat-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   .stat-card.primary .stat-icon {
-    background: rgba(0, 230, 118, 0.1);
+    background: rgba(0, 230, 118, 0.15);
     color: var(--primary-color);
   }
 
   .stat-card.success .stat-icon {
-    background: rgba(76, 175, 80, 0.1);
+    background: rgba(76, 175, 80, 0.15);
     color: #4CAF50;
   }
 
   .stat-card.info .stat-icon {
-    background: rgba(33, 150, 243, 0.1);
+    background: rgba(33, 150, 243, 0.15);
     color: #2196F3;
   }
 
   .stat-card.warning .stat-icon {
-    background: rgba(255, 193, 7, 0.1);
+    background: rgba(255, 193, 7, 0.15);
     color: #FFC107;
   }
 
   .stat-card.secondary .stat-icon {
-    background: rgba(158, 158, 158, 0.1);
+    background: rgba(158, 158, 158, 0.15);
     color: #9E9E9E;
   }
 
   .stat-card.purple .stat-icon {
-    background: rgba(156, 39, 176, 0.1);
+    background: rgba(156, 39, 176, 0.15);
     color: #9C27B0;
   }
 
   .stat-content h3 {
-    font-size: 2rem;
+    font-size: 1.75rem;
     font-weight: 700;
     margin-bottom: 0.25rem;
   }
 
   .stat-content p {
     color: var(--text-muted);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
   }
 
   .stat-footer {
     width: 100%;
-    padding-top: 1rem;
+    padding-top: 0.75rem;
     border-top: 1px solid var(--border-color);
   }
 
@@ -1389,6 +1499,400 @@ require_once '../includes/header.php';
       grid-template-columns: repeat(2, 1fr);
     }
   }
+
+  /* Verification Card Enhanced Styles */
+  .verification-center .badge-count {
+    background: rgba(255, 193, 7, 0.2);
+    color: #FFC107;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .company-logo-placeholder {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .company-logo-placeholder img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 12px;
+  }
+
+  .verification-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .verification-header .company-info {
+    flex: 1;
+    min-width: 150px;
+  }
+
+  .verification-header .company-info h4 {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+    color: var(--text-light);
+  }
+
+  .verification-header .hr-email {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .verification-header .hr-email i {
+    color: var(--primary-color);
+  }
+
+  .pending-badge {
+    background: rgba(255, 193, 7, 0.15);
+    color: #FFC107;
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+  }
+
+  .verification-details .detail-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .verification-details .detail-row.full-width {
+    grid-template-columns: 1fr;
+  }
+
+  .verification-details .detail-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+
+  .verification-details .detail-item i {
+    color: var(--primary-color);
+    width: 16px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  .verification-details .detail-item strong {
+    color: var(--text-light);
+  }
+
+  .verification-details .detail-item a {
+    color: var(--primary-color);
+    text-decoration: none;
+  }
+
+  .verification-details .detail-item a:hover {
+    text-decoration: underline;
+  }
+
+  .verification-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .verification-actions .action-form {
+    margin: 0;
+  }
+
+  .btn-success {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+    border: none;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+  }
+
+  .btn-success:hover {
+    background: linear-gradient(135deg, #45a049, #3d8b40);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+  }
+
+  .btn-outline-danger {
+    background: transparent;
+    color: #F44336;
+    border: 1px solid #F44336;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+  }
+
+  .btn-outline-danger:hover {
+    background: rgba(244, 67, 54, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .btn-outline-secondary {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .btn-outline-secondary:hover {
+    border-color: var(--text-light);
+    color: var(--text-light);
+    transform: translateY(-2px);
+  }
+
+  .empty-state-small {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+  }
+
+  .empty-state-small i {
+    font-size: 3rem;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+    display: block;
+  }
+
+  .empty-state-small p {
+    font-size: 1rem;
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-box {
+    background: var(--card-bg);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 500px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .modal-header h3 {
+    font-size: 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #F44336;
+  }
+
+  .modal-header h3 i {
+    color: #F44336;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    transition: color 0.3s ease;
+  }
+
+  .modal-close:hover {
+    color: var(--text-light);
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .modal-body p {
+    margin-bottom: 1.25rem;
+    color: var(--text-muted);
+  }
+
+  .modal-body p strong {
+    color: var(--text-light);
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-light);
+  }
+
+  .form-group label .required {
+    color: #F44336;
+  }
+
+  .form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-light);
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+    transition: all 0.3s ease;
+  }
+
+  .form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 230, 118, 0.1);
+  }
+
+  .form-control::placeholder {
+    color: var(--text-muted);
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 0 0 16px 16px;
+  }
+
+  .btn-secondary {
+    background: var(--bg-dark);
+    color: var(--text-light);
+    border: 1px solid var(--border-color);
+    padding: 0.6rem 1.25rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .btn-danger {
+    background: linear-gradient(135deg, #F44336, #d32f2f);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.25rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+  }
+
+  .btn-danger:hover {
+    background: linear-gradient(135deg, #d32f2f, #c62828);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+  }
 </style>
+
+<script>
+  // Modal Functions
+  function showRejectModal(companyId, companyName) {
+    document.getElementById('reject_company_id').value = companyId;
+    document.getElementById('reject_company_name').textContent = companyName;
+    document.getElementById('rejectModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function hideRejectModal() {
+    document.getElementById('rejectModal').style.display = 'none';
+    document.getElementById('reason').value = '';
+    document.body.style.overflow = 'auto';
+  }
+
+  // Close modal on outside click
+  document.getElementById('rejectModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      hideRejectModal();
+    }
+  });
+
+  // Close modal on Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      hideRejectModal();
+    }
+  });
+</script>
 
 <?php require_once '../includes/footer.php'; ?>

@@ -41,7 +41,15 @@ include __DIR__ . '/../includes/header.php';
         <div class="jobs-header">
             <div class="jobs-header-content">
                 <h1>Find Your Perfect Job</h1>
-                <p><?php echo number_format($totalJobs); ?> jobs available</p>
+                <?php if (!empty($filters['search'])): ?>
+                    <p class="search-results-info">
+                        <span class="results-count"><?php echo number_format($totalJobs); ?></span> 
+                        <?php echo $totalJobs === 1 ? 'job' : 'jobs'; ?> found for 
+                        "<span class="search-term"><?php echo sanitize($filters['search']); ?></span>"
+                    </p>
+                <?php else: ?>
+                    <p><?php echo number_format($totalJobs); ?> jobs available</p>
+                <?php endif; ?>
             </div>
         </div>
         
@@ -279,13 +287,26 @@ include __DIR__ . '/../includes/header.php';
                         </div>
                     <?php endif; ?>
                 <?php else: ?>
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
+                    <div class="no-results">
+                        <div class="no-results-icon">
                             <i class="fas fa-search"></i>
                         </div>
-                        <h3 class="empty-state-title">No jobs found</h3>
-                        <p class="empty-state-text">Try adjusting your search or filter criteria to find more opportunities.</p>
-                        <a href="<?php echo BASE_URL; ?>/jobs/" class="btn btn-primary">Clear Filters</a>
+                        <?php if (!empty($filters['search'])): ?>
+                            <h3>No jobs found for "<?php echo sanitize($filters['search']); ?>"</h3>
+                            <p>We couldn't find any jobs matching your search. Try these suggestions:</p>
+                            <ul class="search-suggestions">
+                                <li><i class="fas fa-check text-accent"></i> Check for spelling errors</li>
+                                <li><i class="fas fa-check text-accent"></i> Try more general keywords</li>
+                                <li><i class="fas fa-check text-accent"></i> Remove some filters</li>
+                                <li><i class="fas fa-check text-accent"></i> Browse all available jobs</li>
+                            </ul>
+                        <?php else: ?>
+                            <h3>No jobs found</h3>
+                            <p>Try adjusting your filter criteria to find more opportunities.</p>
+                        <?php endif; ?>
+                        <a href="<?php echo BASE_URL; ?>/jobs/" class="btn btn-primary" style="margin-top: var(--spacing-lg);">
+                            <i class="fas fa-refresh"></i> Clear All Filters
+                        </a>
                     </div>
                 <?php endif; ?>
             </div>

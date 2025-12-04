@@ -9,15 +9,14 @@ require_once '../classes/Database.php';
 require_once '../classes/User.php';
 require_once '../classes/SeekerProfile.php';
 
-session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] !== ROLE_SEEKER) {
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_SEEKER) {
   header('Location: ' . BASE_URL . '/auth/login.php?redirect=seeker/profile');
   exit;
 }
 
 $db = Database::getInstance()->getConnection();
-$userModel = new User($db);
-$profileModel = new SeekerProfile($db);
+$userModel = new User();
+$profileModel = new SeekerProfile();
 
 $user = $userModel->findById($_SESSION['user_id']);
 $profile = $profileModel->findByUserId($_SESSION['user_id']);
@@ -26,11 +25,11 @@ $profile = $profileModel->findByUserId($_SESSION['user_id']);
 if (!$profile) {
   $profileModel->create([
     'user_id' => $_SESSION['user_id'],
-    'headline' => '',
-    'summary' => '',
-    'skills' => '[]',
-    'experience' => '[]',
-    'education' => '[]'
+    'first_name' => '',
+    'last_name' => '',
+    'headline' => null,
+    'phone' => null,
+    'location' => null
   ]);
   $profile = $profileModel->findByUserId($_SESSION['user_id']);
 }
@@ -45,13 +44,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if ($action === 'update_basic') {
     // Update basic info
     $updateData = [
+      'first_name' => trim($_POST['first_name'] ?? ''),
+      'last_name' => trim($_POST['last_name'] ?? ''),
       'headline' => trim($_POST['headline'] ?? ''),
-      'summary' => trim($_POST['summary'] ?? ''),
+      'bio' => trim($_POST['bio'] ?? ''),
       'phone' => trim($_POST['phone'] ?? ''),
       'location' => trim($_POST['location'] ?? ''),
-      'website' => trim($_POST['website'] ?? ''),
-      'linkedin' => trim($_POST['linkedin'] ?? ''),
-      'github' => trim($_POST['github'] ?? '')
+      'portfolio_url' => trim($_POST['portfolio_url'] ?? ''),
+      'linkedin_url' => trim($_POST['linkedin_url'] ?? ''),
+      'github_url' => trim($_POST['github_url'] ?? '')
     ];
 
     if ($profileModel->update($profile['id'], $updateData)) {
@@ -69,53 +70,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $messageType = 'success';
     $profile = $profileModel->findByUserId($_SESSION['user_id']);
   } elseif ($action === 'add_experience') {
-    $experience = json_decode($profile['experience'] ?? '[]', true) ?: [];
-    $newExp = [
-      'id' => uniqid(),
-      'title' => trim($_POST['exp_title'] ?? ''),
-      'company' => trim($_POST['exp_company'] ?? ''),
+    $expData = [
+      'job_title' => trim($_POST['exp_title'] ?? ''),
+      'company_name' => trim($_POST['exp_company'] ?? ''),
       'location' => trim($_POST['exp_location'] ?? ''),
-      'start_date' => $_POST['exp_start_date'] ?? '',
-      'end_date' => $_POST['exp_current'] ? null : ($_POST['exp_end_date'] ?? ''),
-      'current' => isset($_POST['exp_current']),
+      'start_date' => $_POST['exp_start_date'] ?? null,
+      'end_date' => isset($_POST['exp_current']) ? null : ($_POST['exp_end_date'] ?? null),
+      'is_current' => isset($_POST['exp_current']) ? 1 : 0,
       'description' => trim($_POST['exp_description'] ?? '')
     ];
-    array_unshift($experience, $newExp);
-    $profileModel->update($profile['id'], ['experience' => json_encode($experience)]);
+    $profileModel->addExperience($profile['id'], $expData);
     $message = 'Experience added successfully!';
     $messageType = 'success';
     $profile = $profileModel->findByUserId($_SESSION['user_id']);
   } elseif ($action === 'delete_experience') {
-    $expId = $_POST['exp_id'] ?? '';
-    $experience = json_decode($profile['experience'] ?? '[]', true) ?: [];
-    $experience = array_filter($experience, fn($e) => $e['id'] !== $expId);
-    $profileModel->update($profile['id'], ['experience' => json_encode(array_values($experience))]);
+    $expId = (int) ($_POST['exp_id'] ?? 0);
+    if ($expId) {
+      $profileModel->deleteExperience($expId);
+    }
     $message = 'Experience removed.';
     $messageType = 'success';
     $profile = $profileModel->findByUserId($_SESSION['user_id']);
   } elseif ($action === 'add_education') {
-    $education = json_decode($profile['education'] ?? '[]', true) ?: [];
-    $newEdu = [
-      'id' => uniqid(),
+    $eduData = [
       'degree' => trim($_POST['edu_degree'] ?? ''),
-      'field' => trim($_POST['edu_field'] ?? ''),
+      'field_of_study' => trim($_POST['edu_field'] ?? ''),
       'institution' => trim($_POST['edu_institution'] ?? ''),
       'location' => trim($_POST['edu_location'] ?? ''),
-      'start_year' => $_POST['edu_start_year'] ?? '',
-      'end_year' => $_POST['edu_current'] ? null : ($_POST['edu_end_year'] ?? ''),
-      'current' => isset($_POST['edu_current']),
-      'gpa' => trim($_POST['edu_gpa'] ?? '')
+      'start_date' => $_POST['edu_start_year'] ? $_POST['edu_start_year'] . '-01-01' : null,
+      'end_date' => isset($_POST['edu_current']) ? null : ($_POST['edu_end_year'] ? $_POST['edu_end_year'] . '-01-01' : null),
+      'is_current' => isset($_POST['edu_current']) ? 1 : 0,
+      'grade' => trim($_POST['edu_gpa'] ?? '')
     ];
-    array_unshift($education, $newEdu);
-    $profileModel->update($profile['id'], ['education' => json_encode($education)]);
+    $profileModel->addEducation($profile['id'], $eduData);
     $message = 'Education added successfully!';
     $messageType = 'success';
     $profile = $profileModel->findByUserId($_SESSION['user_id']);
   } elseif ($action === 'delete_education') {
-    $eduId = $_POST['edu_id'] ?? '';
-    $education = json_decode($profile['education'] ?? '[]', true) ?: [];
-    $education = array_filter($education, fn($e) => $e['id'] !== $eduId);
-    $profileModel->update($profile['id'], ['education' => json_encode(array_values($education))]);
+    $eduId = (int) ($_POST['edu_id'] ?? 0);
+    if ($eduId) {
+      $profileModel->deleteEducation($eduId);
+    }
     $message = 'Education removed.';
     $messageType = 'success';
     $profile = $profileModel->findByUserId($_SESSION['user_id']);
@@ -136,12 +131,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $uploadPath = '../uploads/resumes/' . $filename;
 
         // Delete old resume if exists
-        if ($profile['resume_path'] && file_exists('../uploads/resumes/' . $profile['resume_path'])) {
-          unlink('../uploads/resumes/' . $profile['resume_path']);
+        if ($profile['resume_file_path'] && file_exists('../uploads/resumes/' . $profile['resume_file_path'])) {
+          unlink('../uploads/resumes/' . $profile['resume_file_path']);
         }
 
         if (move_uploaded_file($_FILES['resume']['tmp_name'], $uploadPath)) {
-          $profileModel->update($profile['id'], ['resume_path' => $filename]);
+          $profileModel->update($profile['id'], ['resume_file_path' => $filename]);
           $message = 'Resume uploaded successfully!';
           $messageType = 'success';
           $profile = $profileModel->findByUserId($_SESSION['user_id']);
@@ -155,9 +150,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Parse profile data
-$skills = json_decode($profile['skills'] ?? '[]', true) ?: [];
-$experience = json_decode($profile['experience'] ?? '[]', true) ?: [];
-$education = json_decode($profile['education'] ?? '[]', true) ?: [];
+$skills = is_array($profile['skills']) ? $profile['skills'] : (json_decode($profile['skills'] ?? '[]', true) ?: []);
+$experience = $profile['experience'] ?? [];
+$education = $profile['education'] ?? [];
 
 $pageTitle = 'My Profile';
 require_once '../includes/header.php';
@@ -177,10 +172,10 @@ require_once '../includes/header.php';
       <!-- Resume Header -->
       <header class="resume-header">
         <div class="resume-avatar">
-          <span><?php echo strtoupper(substr($user['full_name'], 0, 1)); ?></span>
+          <span><?php echo strtoupper(substr($profile['first_name'] ?? 'U', 0, 1)); ?></span>
         </div>
         <div class="resume-identity">
-          <h1><?php echo htmlspecialchars($user['full_name']); ?></h1>
+          <h1><?php echo htmlspecialchars(($profile['first_name'] ?? '') . ' ' . ($profile['last_name'] ?? '')); ?></h1>
           <h2 class="headline"><?php echo htmlspecialchars($profile['headline'] ?? 'Add your professional headline'); ?>
           </h2>
           <div class="contact-info">
@@ -193,18 +188,18 @@ require_once '../includes/header.php';
             <?php endif; ?>
           </div>
           <div class="social-links">
-            <?php if ($profile['linkedin']): ?>
-              <a href="<?php echo htmlspecialchars($profile['linkedin']); ?>" target="_blank" class="social-link">
+            <?php if ($profile['linkedin_url']): ?>
+              <a href="<?php echo htmlspecialchars($profile['linkedin_url']); ?>" target="_blank" class="social-link">
                 <i class="fab fa-linkedin"></i>
               </a>
             <?php endif; ?>
-            <?php if ($profile['github']): ?>
-              <a href="<?php echo htmlspecialchars($profile['github']); ?>" target="_blank" class="social-link">
+            <?php if ($profile['github_url']): ?>
+              <a href="<?php echo htmlspecialchars($profile['github_url']); ?>" target="_blank" class="social-link">
                 <i class="fab fa-github"></i>
               </a>
             <?php endif; ?>
-            <?php if ($profile['website']): ?>
-              <a href="<?php echo htmlspecialchars($profile['website']); ?>" target="_blank" class="social-link">
+            <?php if ($profile['portfolio_url']): ?>
+              <a href="<?php echo htmlspecialchars($profile['portfolio_url']); ?>" target="_blank" class="social-link">
                 <i class="fas fa-globe"></i>
               </a>
             <?php endif; ?>
@@ -214,8 +209,8 @@ require_once '../includes/header.php';
           <button class="btn btn-outline-primary btn-sm" onclick="openModal('basicInfoModal')">
             <i class="fas fa-edit"></i> Edit
           </button>
-          <?php if ($profile['resume_path']): ?>
-            <a href="<?php echo BASE_URL; ?>/uploads/resumes/<?php echo $profile['resume_path']; ?>"
+          <?php if ($profile['resume_file_path']): ?>
+            <a href="<?php echo BASE_URL; ?>/uploads/resumes/<?php echo $profile['resume_file_path']; ?>"
               class="btn btn-primary btn-sm" target="_blank">
               <i class="fas fa-download"></i> Download Resume
             </a>
@@ -234,8 +229,8 @@ require_once '../includes/header.php';
             </button>
           </div>
           <div class="section-content">
-            <?php if ($profile['summary']): ?>
-              <p class="summary-text"><?php echo nl2br(htmlspecialchars($profile['summary'])); ?></p>
+            <?php if ($profile['bio']): ?>
+              <p class="summary-text"><?php echo nl2br(htmlspecialchars($profile['bio'])); ?></p>
             <?php else: ?>
               <p class="empty-placeholder">
                 Add a professional summary to introduce yourself to potential employers.
@@ -286,13 +281,13 @@ require_once '../includes/header.php';
                     <div class="timeline-content">
                       <div class="timeline-header">
                         <div class="timeline-title">
-                          <h4><?php echo htmlspecialchars($exp['title']); ?></h4>
-                          <p class="company"><?php echo htmlspecialchars($exp['company']); ?></p>
+                          <h4><?php echo htmlspecialchars($exp['job_title']); ?></h4>
+                          <p class="company"><?php echo htmlspecialchars($exp['company_name']); ?></p>
                         </div>
                         <div class="timeline-meta">
                           <span class="date">
                             <?php echo date('M Y', strtotime($exp['start_date'])); ?> -
-                            <?php echo $exp['current'] ? 'Present' : date('M Y', strtotime($exp['end_date'])); ?>
+                            <?php echo $exp['is_current'] ? 'Present' : date('M Y', strtotime($exp['end_date'])); ?>
                           </span>
                           <?php if ($exp['location']): ?>
                             <span class="location">
@@ -345,17 +340,18 @@ require_once '../includes/header.php';
                     <div class="edu-content">
                       <div class="edu-header">
                         <div class="edu-title">
-                          <h4><?php echo htmlspecialchars($edu['degree']); ?> in
-                            <?php echo htmlspecialchars($edu['field']); ?></h4>
+                          <h4><?php echo htmlspecialchars($edu['degree']); ?><?php if ($edu['field_of_study']): ?> in
+                              <?php echo htmlspecialchars($edu['field_of_study']); ?><?php endif; ?>
+                          </h4>
                           <p class="institution"><?php echo htmlspecialchars($edu['institution']); ?></p>
                         </div>
                         <div class="edu-meta">
                           <span class="date">
-                            <?php echo $edu['start_year']; ?> -
-                            <?php echo $edu['current'] ? 'Present' : $edu['end_year']; ?>
+                            <?php echo $edu['start_date'] ? date('Y', strtotime($edu['start_date'])) : ''; ?> -
+                            <?php echo $edu['is_current'] ? 'Present' : ($edu['end_date'] ? date('Y', strtotime($edu['end_date'])) : ''); ?>
                           </span>
-                          <?php if ($edu['gpa']): ?>
-                            <span class="gpa">GPA: <?php echo htmlspecialchars($edu['gpa']); ?></span>
+                          <?php if ($edu['grade']): ?>
+                            <span class="gpa">GPA: <?php echo htmlspecialchars($edu['grade']); ?></span>
                           <?php endif; ?>
                         </div>
                         <form method="POST" class="delete-form" onsubmit="return confirm('Remove this education?');">
@@ -387,17 +383,17 @@ require_once '../includes/header.php';
           </div>
           <div class="section-content">
             <div class="resume-upload-area">
-              <?php if ($profile['resume_path']): ?>
+              <?php if ($profile['resume_file_path']): ?>
                 <div class="current-resume">
                   <div class="file-icon">
                     <i class="fas fa-file-pdf"></i>
                   </div>
                   <div class="file-info">
                     <h4>Current Resume</h4>
-                    <p><?php echo $profile['resume_path']; ?></p>
+                    <p><?php echo $profile['resume_file_path']; ?></p>
                   </div>
                   <div class="file-actions">
-                    <a href="<?php echo BASE_URL; ?>/uploads/resumes/<?php echo $profile['resume_path']; ?>"
+                    <a href="<?php echo BASE_URL; ?>/uploads/resumes/<?php echo $profile['resume_file_path']; ?>"
                       class="btn btn-outline-primary btn-sm" target="_blank">
                       <i class="fas fa-eye"></i> View
                     </a>
@@ -441,6 +437,19 @@ require_once '../includes/header.php';
     <form method="POST">
       <input type="hidden" name="action" value="update_basic">
       <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="first_name">First Name</label>
+            <input type="text" id="first_name" name="first_name" class="form-control"
+              value="<?php echo htmlspecialchars($profile['first_name'] ?? ''); ?>" placeholder="Your first name" required>
+          </div>
+          <div class="form-group">
+            <label for="last_name">Last Name</label>
+            <input type="text" id="last_name" name="last_name" class="form-control"
+              value="<?php echo htmlspecialchars($profile['last_name'] ?? ''); ?>" placeholder="Your last name" required>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="headline">Professional Headline</label>
           <input type="text" id="headline" name="headline" class="form-control"
@@ -449,9 +458,9 @@ require_once '../includes/header.php';
         </div>
 
         <div class="form-group">
-          <label for="summary">Professional Summary</label>
-          <textarea id="summary" name="summary" class="form-control" rows="5"
-            placeholder="Write a brief professional summary..."><?php echo htmlspecialchars($profile['summary'] ?? ''); ?></textarea>
+          <label for="bio">Professional Summary</label>
+          <textarea id="bio" name="bio" class="form-control" rows="5"
+            placeholder="Write a brief professional summary..."><?php echo htmlspecialchars($profile['bio'] ?? ''); ?></textarea>
         </div>
 
         <div class="form-row">
@@ -468,22 +477,22 @@ require_once '../includes/header.php';
         </div>
 
         <div class="form-group">
-          <label for="website">Website</label>
-          <input type="url" id="website" name="website" class="form-control"
-            value="<?php echo htmlspecialchars($profile['website'] ?? ''); ?>" placeholder="https://yourwebsite.com">
+          <label for="portfolio_url">Website</label>
+          <input type="url" id="portfolio_url" name="portfolio_url" class="form-control"
+            value="<?php echo htmlspecialchars($profile['portfolio_url'] ?? ''); ?>" placeholder="https://yourwebsite.com">
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label for="linkedin">LinkedIn</label>
-            <input type="url" id="linkedin" name="linkedin" class="form-control"
-              value="<?php echo htmlspecialchars($profile['linkedin'] ?? ''); ?>"
+            <label for="linkedin_url">LinkedIn</label>
+            <input type="url" id="linkedin_url" name="linkedin_url" class="form-control"
+              value="<?php echo htmlspecialchars($profile['linkedin_url'] ?? ''); ?>"
               placeholder="https://linkedin.com/in/yourprofile">
           </div>
           <div class="form-group">
-            <label for="github">GitHub</label>
-            <input type="url" id="github" name="github" class="form-control"
-              value="<?php echo htmlspecialchars($profile['github'] ?? ''); ?>"
+            <label for="github_url">GitHub</label>
+            <input type="url" id="github_url" name="github_url" class="form-control"
+              value="<?php echo htmlspecialchars($profile['github_url'] ?? ''); ?>"
               placeholder="https://github.com/yourusername">
           </div>
         </div>

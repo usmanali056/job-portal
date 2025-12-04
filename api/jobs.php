@@ -6,7 +6,6 @@
 
 header('Content-Type: application/json');
 
-session_start();
 require_once '../config/config.php';
 require_once '../classes/Database.php';
 
@@ -24,11 +23,11 @@ $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 $perPage = isset($_GET['per_page']) ? min(50, max(1, intval($_GET['per_page']))) : 10;
 
 // Build query
-$where = ["j.status = 'active'", "c.is_verified = 1"];
+$where = ["j.status = 'active'", "c.verification_status = 'verified'"];
 $params = [];
 
 if ($search) {
-  $where[] = "(j.title LIKE ? OR j.description LIKE ? OR c.name LIKE ? OR j.requirements LIKE ?)";
+  $where[] = "(j.title LIKE ? OR j.description LIKE ? OR c.company_name LIKE ? OR j.requirements LIKE ?)";
   $searchTerm = "%$search%";
   $params[] = $searchTerm;
   $params[] = $searchTerm;
@@ -79,7 +78,7 @@ $totalPages = ceil($totalJobs / $perPage);
 
 // Get jobs
 $sql = "
-    SELECT j.*, c.name as company_name, c.logo as company_logo, c.location as company_location,
+    SELECT j.*, c.company_name, c.logo as company_logo, c.headquarters as company_location,
            (SELECT COUNT(*) FROM applications WHERE job_id = j.id) as application_count
     FROM jobs j
     JOIN companies c ON j.company_id = c.id
@@ -112,7 +111,7 @@ $formattedJobs = array_map(function ($job) {
     ],
     'description' => substr($job['description'], 0, 200) . '...',
     'is_featured' => (bool) $job['is_featured'],
-    'deadline' => $job['deadline'],
+    'deadline' => $job['application_deadline'],
     'created_at' => $job['created_at'],
     'application_count' => (int) $job['application_count'],
     'url' => '/jobs/view.php?id=' . $job['id']

@@ -203,7 +203,7 @@ class AuthController
   {
     $_SESSION['user_id'] = $user['id'];
     $_SESSION['user_email'] = $user['email'];
-    $_SESSION['user_role'] = $user['role'];
+    $_SESSION['role'] = $user['role'];
     $_SESSION['is_verified'] = $user['is_verified'];
     $_SESSION['logged_in'] = true;
 
@@ -225,11 +225,11 @@ class AuthController
 
     switch ($role) {
       case ROLE_ADMIN:
-        return BASE_URL . '/admin/dashboard.php';
+        return BASE_URL . '/admin/';
       case ROLE_HR:
-        return BASE_URL . '/hr/dashboard.php';
+        return BASE_URL . '/hr/';
       case ROLE_SEEKER:
-        return BASE_URL . '/seeker/dashboard.php';
+        return BASE_URL . '/seeker/';
       default:
         return BASE_URL;
     }

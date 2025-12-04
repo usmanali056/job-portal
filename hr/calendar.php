@@ -9,15 +9,14 @@ require_once '../classes/User.php';
 require_once '../classes/Event.php';
 require_once '../classes/Application.php';
 
-session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] !== ROLE_HR) {
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_HR) {
   header('Location: ' . BASE_URL . '/auth/login.php?redirect=hr/calendar');
   exit;
 }
 
 $db = Database::getInstance()->getConnection();
-$userModel = new User($db);
-$eventModel = new Event($db);
+$userModel = new User();
+$eventModel = new Event();
 
 $hr = $userModel->findById($_SESSION['user_id']);
 
@@ -50,11 +49,12 @@ $startDate = date('Y-m-01', $firstDay);
 $endDate = date('Y-m-t', $firstDay);
 
 $stmt = $db->prepare("
-    SELECT e.*, u.full_name as seeker_name, j.title as job_title
+    SELECT e.*, CONCAT(sp.first_name, ' ', sp.last_name) as seeker_name, j.title as job_title
     FROM events e
-    JOIN users u ON e.seeker_id = u.id
-    LEFT JOIN jobs j ON e.job_id = j.id
-    WHERE e.hr_id = ? 
+    LEFT JOIN seeker_profiles sp ON e.seeker_user_id = sp.user_id
+    LEFT JOIN applications a ON e.application_id = a.id
+    LEFT JOIN jobs j ON a.job_id = j.id
+    WHERE e.hr_user_id = ? 
     AND e.event_date BETWEEN ? AND ?
     ORDER BY e.event_date ASC, e.event_time ASC
 ");
@@ -73,11 +73,13 @@ foreach ($events as $event) {
 
 // Get upcoming events for sidebar
 $stmt = $db->prepare("
-    SELECT e.*, u.full_name as seeker_name, u.email as seeker_email, j.title as job_title
+    SELECT e.*, CONCAT(sp.first_name, ' ', sp.last_name) as seeker_name, u.email as seeker_email, j.title as job_title
     FROM events e
-    JOIN users u ON e.seeker_id = u.id
-    LEFT JOIN jobs j ON e.job_id = j.id
-    WHERE e.hr_id = ? AND e.event_date >= CURDATE() AND e.status = 'scheduled'
+    JOIN users u ON e.seeker_user_id = u.id
+    LEFT JOIN seeker_profiles sp ON u.id = sp.user_id
+    LEFT JOIN applications a ON e.application_id = a.id
+    LEFT JOIN jobs j ON a.job_id = j.id
+    WHERE e.hr_user_id = ? AND e.event_date >= CURDATE() AND e.status = 'scheduled'
     ORDER BY e.event_date ASC, e.event_time ASC
     LIMIT 10
 ");
@@ -86,10 +88,10 @@ $upcomingEvents = $stmt->fetchAll();
 
 // Get shortlisted candidates for scheduling dropdown
 $stmt = $db->prepare("
-    SELECT a.id as app_id, a.seeker_id, u.full_name, j.id as job_id, j.title as job_title
+    SELECT a.id as app_id, a.seeker_id, CONCAT(sp.first_name, ' ', sp.last_name) as full_name, j.id as job_id, j.title as job_title
     FROM applications a
     JOIN jobs j ON a.job_id = j.id
-    JOIN users u ON a.seeker_id = u.id
+    LEFT JOIN seeker_profiles sp ON a.seeker_id = sp.user_id
     WHERE j.posted_by = ? AND a.status IN ('shortlisted', 'interview')
     ORDER BY a.applied_at DESC
 ");
@@ -105,16 +107,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   if ($action === 'create_event') {
     $eventData = [
-      'hr_id' => $_SESSION['user_id'],
-      'seeker_id' => (int) $_POST['seeker_id'],
-      'job_id' => (int) $_POST['job_id'],
+      'hr_user_id' => $_SESSION['user_id'],
+      'seeker_user_id' => (int) $_POST['seeker_id'],
+      'application_id' => (int) ($_POST['application_id'] ?? 0) ?: null,
+      'event_title' => trim($_POST['event_title'] ?? 'Interview'),
       'event_type' => $_POST['event_type'],
       'event_date' => $_POST['event_date'],
       'event_time' => $_POST['event_time'],
-      'duration' => (int) $_POST['duration'],
+      'duration_minutes' => (int) $_POST['duration'],
       'location' => trim($_POST['location'] ?? ''),
       'meeting_link' => trim($_POST['meeting_link'] ?? ''),
-      'notes' => trim($_POST['notes'] ?? ''),
+      'description' => trim($_POST['notes'] ?? ''),
       'status' => 'scheduled'
     ];
 
@@ -123,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($eventId) {
       // Update application status to 'interview'
       $stmt = $db->prepare("UPDATE applications SET status = 'interview' WHERE seeker_id = ? AND job_id = ?");
-      $stmt->execute([$eventData['seeker_id'], $eventData['job_id']]);
+      $stmt->execute([$eventData['seeker_user_id'], (int) $_POST['job_id']]);
 
       $message = 'Interview scheduled successfully!';
       $messageType = 'success';
@@ -161,17 +164,67 @@ if (isset($_GET['scheduled'])) {
 
 $pageTitle = 'Calendar';
 require_once '../includes/header.php';
+
+// Get company info for sidebar
+$stmt = $db->prepare("SELECT * FROM companies WHERE hr_user_id = ?");
+$stmt->execute([$_SESSION['user_id']]);
+$company = $stmt->fetch(PDO::FETCH_ASSOC);
 ?>
 
-<div class="calendar-page">
-  <div class="calendar-container">
-    <!-- Page Header -->
-    <div class="page-header">
-      <div class="header-content">
-        <h1>Interview Calendar</h1>
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <aside class="dashboard-sidebar">
+    <div class="sidebar-header">
+      <div class="hr-avatar">
+        <?php echo strtoupper(substr($company['company_name'] ?? 'HR', 0, 2)); ?>
+      </div>
+      <h3><?php echo htmlspecialchars($company['company_name'] ?? $hr['email']); ?></h3>
+      <span class="role-badge hr">HR Manager</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="<?php echo BASE_URL; ?>/hr/index.php" class="nav-item">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/jobs.php" class="nav-item">
+        <i class="fas fa-briefcase"></i>
+        <span>My Jobs</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/post-job.php" class="nav-item">
+        <i class="fas fa-plus-circle"></i>
+        <span>Post New Job</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/applications.php" class="nav-item">
+        <i class="fas fa-file-alt"></i>
+        <span>Applications</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/calendar.php" class="nav-item active">
+        <i class="fas fa-calendar-alt"></i>
+        <span>Calendar</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/company.php" class="nav-item">
+        <i class="fas fa-building"></i>
+        <span>Company Profile</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="<?php echo BASE_URL; ?>/auth/logout.php" class="logout-btn">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="dashboard-main">
+    <div class="dashboard-header">
+      <div class="header-left">
+        <h1><i class="fas fa-calendar-alt"></i> Interview Calendar</h1>
         <p>Schedule and manage candidate interviews</p>
       </div>
-      <div class="header-actions">
+      <div class="header-right">
         <button class="btn btn-primary" onclick="openScheduleModal()">
           <i class="fas fa-plus"></i> Schedule Interview
         </button>
@@ -340,7 +393,7 @@ require_once '../includes/header.php';
         </div>
       </div>
     </div>
-  </div>
+  </main>
 </div>
 
 <!-- Schedule Interview Modal -->

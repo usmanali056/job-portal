@@ -67,7 +67,10 @@ $flash = getFlash();
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="<?php echo CSS_URL; ?>style.css">
+  <link rel="stylesheet" href="<?php echo CSS_URL; ?>style.css?v=<?php echo time(); ?>">
+  
+  <!-- Dashboard Stylesheet -->
+  <link rel="stylesheet" href="<?php echo CSS_URL; ?>dashboard.css?v=<?php echo time(); ?>">
 
   <?php if (isset($additionalCSS)): ?>
     <?php foreach ($additionalCSS as $css): ?>
@@ -86,12 +89,14 @@ $flash = getFlash();
 
       <ul class="navbar-menu">
         <li><a href="<?php echo BASE_URL; ?>"
-            class="navbar-link <?php echo basename($_SERVER['PHP_SELF']) === 'index.php' ? 'active' : ''; ?>">Home</a>
+            class="navbar-link <?php echo basename($_SERVER['PHP_SELF']) === 'index.php' && strpos($_SERVER['REQUEST_URI'], '/jobs') === false && strpos($_SERVER['REQUEST_URI'], '/companies') === false && strpos($_SERVER['REQUEST_URI'], '/admin') === false && strpos($_SERVER['REQUEST_URI'], '/hr') === false && strpos($_SERVER['REQUEST_URI'], '/seeker') === false ? 'active' : ''; ?>">Home</a>
         </li>
         <li><a href="<?php echo BASE_URL; ?>/jobs/"
             class="navbar-link <?php echo strpos($_SERVER['REQUEST_URI'], '/jobs') !== false ? 'active' : ''; ?>">Find
             Jobs</a></li>
-        <li><a href="<?php echo BASE_URL; ?>/companies.php" class="navbar-link">Companies</a></li>
+        <li><a href="<?php echo BASE_URL; ?>/companies/"
+            class="navbar-link <?php echo strpos($_SERVER['REQUEST_URI'], '/companies') !== false ? 'active' : ''; ?>">Companies</a>
+        </li>
         <?php if (isLoggedIn() && hasRole(ROLE_HR)): ?>
           <li><a href="<?php echo BASE_URL; ?>/hr/post-job.php" class="navbar-link">Post a Job</a></li>
         <?php endif; ?>
@@ -100,44 +105,54 @@ $flash = getFlash();
       <div class="navbar-actions">
         <?php if (isLoggedIn()): ?>
           <!-- Notifications -->
-          <button class="btn btn-icon btn-ghost" title="Notifications">
+          <button class="btn btn-icon btn-ghost nav-notification" title="Notifications">
             <i class="far fa-bell"></i>
+            <span class="notification-badge">3</span>
           </button>
 
           <!-- User Dropdown -->
-          <div class="dropdown">
-            <button class="btn btn-ghost dropdown-toggle">
+          <div class="nav-dropdown">
+            <button class="nav-dropdown-toggle">
               <div class="avatar avatar-sm">
                 <span class="initials"><?php echo getInitials($currentUserName); ?></span>
               </div>
-              <span class="d-none d-md-inline"><?php echo sanitize($currentUserName); ?></span>
+              <span class="nav-user-name"><?php echo sanitize($currentUserName); ?></span>
               <i class="fas fa-chevron-down"></i>
             </button>
-            <div class="dropdown-menu">
+            <div class="nav-dropdown-menu">
               <?php if (hasRole(ROLE_ADMIN)): ?>
-                <a href="<?php echo BASE_URL; ?>/admin/dashboard.php" class="dropdown-item">
+                            <a href="<?php echo BASE_URL; ?>/admin/" class="nav-dropdown-item">
                   <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a href="<?php echo BASE_URL; ?>/admin/users.php" class="nav-dropdown-item">
+                  <i class="fas fa-users"></i> Manage Users
                 </a>
               <?php elseif (hasRole(ROLE_HR)): ?>
-                <a href="<?php echo BASE_URL; ?>/hr/dashboard.php" class="dropdown-item">
+                            <a href="<?php echo BASE_URL; ?>/hr/" class="nav-dropdown-item">
                   <i class="fas fa-tachometer-alt"></i> Dashboard
                 </a>
-                <a href="<?php echo BASE_URL; ?>/hr/company-profile.php" class="dropdown-item">
+                <a href="<?php echo BASE_URL; ?>/hr/company.php" class="nav-dropdown-item">
                   <i class="fas fa-building"></i> Company Profile
                 </a>
+                <a href="<?php echo BASE_URL; ?>/hr/applications.php" class="nav-dropdown-item">
+                  <i class="fas fa-file-alt"></i> Applications
+                </a>
               <?php else: ?>
-                <a href="<?php echo BASE_URL; ?>/seeker/dashboard.php" class="dropdown-item">
+                            <a href="<?php echo BASE_URL; ?>/seeker/" class="nav-dropdown-item">
                   <i class="fas fa-tachometer-alt"></i> Dashboard
                 </a>
-                <a href="<?php echo BASE_URL; ?>/seeker/profile.php" class="dropdown-item">
+                <a href="<?php echo BASE_URL; ?>/seeker/profile.php" class="nav-dropdown-item">
                   <i class="fas fa-user"></i> My Profile
                 </a>
-                <a href="<?php echo BASE_URL; ?>/seeker/applications.php" class="dropdown-item">
+                <a href="<?php echo BASE_URL; ?>/seeker/applications.php" class="nav-dropdown-item">
                   <i class="fas fa-file-alt"></i> My Applications
                 </a>
+                <a href="<?php echo BASE_URL; ?>/seeker/saved-jobs.php" class="nav-dropdown-item">
+                  <i class="fas fa-heart"></i> Saved Jobs
+                </a>
               <?php endif; ?>
-              <div class="dropdown-divider"></div>
-              <a href="<?php echo BASE_URL; ?>/auth/logout.php" class="dropdown-item text-error">
+                    <div class="nav-dropdown-divider"></div>
+                    <a href="<?php echo BASE_URL; ?>/auth/logout.php" class="nav-dropdown-item text-error">
                 <i class="fas fa-sign-out-alt"></i> Logout
               </a>
             </div>

@@ -179,7 +179,7 @@ function getCurrentUserId(): ?int
  */
 function getCurrentUserRole(): ?string
 {
-  return $_SESSION['user_role'] ?? null;
+  return $_SESSION['role'] ?? null;
 }
 
 /**

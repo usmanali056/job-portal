@@ -10,28 +10,130 @@ require_once '../classes/User.php';
 require_once '../classes/Job.php';
 require_once '../classes/Company.php';
 
-session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] !== ROLE_HR) {
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_HR) {
   header('Location: ' . BASE_URL . '/auth/login.php?redirect=hr/post-job');
   exit;
 }
 
 $db = Database::getInstance()->getConnection();
-$userModel = new User($db);
-$jobModel = new Job($db);
-$companyModel = new Company($db);
+$userModel = new User();
+$jobModel = new Job();
+$companyModel = new Company();
 
 $hr = $userModel->findById($_SESSION['user_id']);
 
-// Check if HR is verified
-if (!$hr['is_verified']) {
-  header('Location: ' . BASE_URL . '/hr/index.php');
+// Get HR's company using hr_user_id (companies table references users, not vice versa)
+$stmt = $db->prepare("SELECT * FROM companies WHERE hr_user_id = ?");
+$stmt->execute([$_SESSION['user_id']]);
+$company = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// If no company, redirect to create one
+if (!$company) {
+  header('Location: ' . BASE_URL . '/hr/create-company.php');
   exit;
 }
 
-$company = null;
-if ($hr['company_id']) {
-  $company = $companyModel->findById($hr['company_id']);
+// Check if company is verified - if not, show pending message
+if ($company['verification_status'] !== 'verified') {
+  $pageTitle = 'Account Pending Verification';
+  require_once '../includes/header.php';
+  ?>
+    <div class="verification-pending-container">
+      <div class="pending-card">
+        <div class="pending-icon">
+          <i class="fas fa-clock"></i>
+        </div>
+        <h1>Account Pending Verification</h1>
+        <p>Your company profile is currently under review by our administrators. You will be able to post jobs once your company has been verified.</p>
+        <div class="pending-info">
+          <div class="info-item">
+            <i class="fas fa-building"></i>
+            <span>Company: <?php echo htmlspecialchars($company['company_name']); ?></span>
+          </div>
+          <div class="info-item">
+            <i class="fas fa-info-circle"></i>
+            <span>Status: <?php echo ucfirst($company['verification_status']); ?></span>
+          </div>
+        </div>
+        <a href="<?php echo BASE_URL; ?>/hr/index.php" class="btn btn-primary">
+          <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
+    </div>
+    <style>
+      .verification-pending-container {
+        min-height: calc(100vh - 70px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        margin-top: 70px;
+      }
+      .pending-card {
+        background: var(--card-bg);
+        border-radius: 16px;
+        padding: 3rem;
+        text-align: center;
+        max-width: 500px;
+        border: 1px solid var(--border-color);
+      }
+      .pending-icon {
+        width: 100px;
+        height: 100px;
+        background: rgba(255, 193, 7, 0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 3rem;
+        color: #FFC107;
+      }
+      .pending-card h1 {
+        margin-bottom: 1rem;
+        font-size: 1.75rem;
+      }
+      .pending-card p {
+        color: var(--text-muted);
+        margin-bottom: 1.5rem;
+      }
+      .pending-info {
+        background: var(--bg-dark);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .info-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem;
+        color: var(--text-muted);
+      }
+      .info-item i {
+        color: var(--primary-color);
+        width: 20px;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+        color: var(--bg-dark);
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+      }
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(0, 230, 118, 0.3);
+      }
+    </style>
+    <?php
+    require_once '../includes/footer.php';
+    exit;
 }
 
 $message = '';
@@ -79,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   if (empty($errors)) {
     $jobData = [
-      'company_id' => $hr['company_id'],
+      'company_id' => $company['id'],
       'posted_by' => $_SESSION['user_id'],
       'title' => $title,
       'description' => $description,
@@ -90,10 +192,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       'experience_level' => $experienceLevel,
       'salary_min' => $salaryMin,
       'salary_max' => $salaryMax,
-      'skills' => $skills,
-      'deadline' => $deadline,
-      'vacancies' => $vacancies,
-      'is_remote' => $isRemote,
+      'skills_required' => $skills ? explode(',', $skills) : [],
+      'application_deadline' => $deadline,
+      'positions_available' => $vacancies,
+      'location_type' => $isRemote ? 'remote' : 'onsite',
       'status' => $status
     ];
 
@@ -116,14 +218,61 @@ $pageTitle = 'Post New Job';
 require_once '../includes/header.php';
 ?>
 
-<div class="post-job-page">
-  <div class="page-container">
-    <div class="page-header">
-      <div class="header-content">
-        <a href="<?php echo BASE_URL; ?>/hr/jobs.php" class="back-link">
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <aside class="dashboard-sidebar">
+    <div class="sidebar-header">
+      <div class="hr-avatar">
+        <?php echo strtoupper(substr($company['company_name'] ?? 'HR', 0, 2)); ?>
+      </div>
+      <h3><?php echo htmlspecialchars($company['company_name'] ?? $hr['email']); ?></h3>
+      <span class="role-badge hr">HR Manager</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="<?php echo BASE_URL; ?>/hr/index.php" class="nav-item">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/jobs.php" class="nav-item">
+        <i class="fas fa-briefcase"></i>
+        <span>My Jobs</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/post-job.php" class="nav-item active">
+        <i class="fas fa-plus-circle"></i>
+        <span>Post New Job</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/applications.php" class="nav-item">
+        <i class="fas fa-file-alt"></i>
+        <span>Applications</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/calendar.php" class="nav-item">
+        <i class="fas fa-calendar-alt"></i>
+        <span>Calendar</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/company.php" class="nav-item">
+        <i class="fas fa-building"></i>
+        <span>Company Profile</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="<?php echo BASE_URL; ?>/auth/logout.php" class="logout-btn">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="dashboard-main">
+    <div class="dashboard-header">
+      <div class="header-left">
+        <a href="<?php echo BASE_URL; ?>/hr/jobs.php" class="back-link"
+          style="color: var(--text-secondary); margin-bottom: 0.5rem; display: inline-block;">
           <i class="fas fa-arrow-left"></i> Back to Jobs
         </a>
-        <h1>Post a New Job</h1>
+        <h1><i class="fas fa-plus-circle"></i> Post a New Job</h1>
         <p>Create a compelling job listing to attract the best candidates</p>
       </div>
     </div>
@@ -285,8 +434,8 @@ require_once '../includes/header.php';
                   <?php endif; ?>
                 </div>
                 <div class="company-details">
-                  <h4><?php echo htmlspecialchars($company['name']); ?></h4>
-                  <?php if ($company['is_verified']): ?>
+                  <h4><?php echo htmlspecialchars($company['company_name']); ?></h4>
+                  <?php if ($company['verification_status'] === 'verified'): ?>
                     <span class="verified-badge">
                       <i class="fas fa-check-circle"></i> Verified
                     </span>
@@ -347,7 +496,7 @@ require_once '../includes/header.php';
         </div>
       </div>
     </form>
-  </div>
+  </main>
 </div>
 
 <style>

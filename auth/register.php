@@ -74,8 +74,9 @@ include __DIR__ . '/../includes/header.php';
     <div class="auth-container auth-register">
         <div class="auth-card">
             <div class="auth-header">
+                <a href="<?php echo BASE_URL; ?>" class="logo">JobNexus</a>
                 <h1>Create Account</h1>
-                <p>Join JobNexus to start your journey</p>
+                <p>Join thousands of professionals on JobNexus</p>
             </div>
             
             <?php if (!empty($errors)): ?>
@@ -195,8 +196,8 @@ include __DIR__ . '/../includes/header.php';
                 <!-- Common Fields -->
                 <div class="form-group">
                     <label for="email" class="form-label required">Email Address</label>
-                    <div class="input-icon">
-                        <i class="fas fa-envelope"></i>
+                    <div class="input-group">
+                        <i class="fas fa-envelope input-icon"></i>
                         <input 
                             type="email" 
                             id="email" 
@@ -212,8 +213,8 @@ include __DIR__ . '/../includes/header.php';
                 <div class="form-row">
                     <div class="form-group">
                         <label for="password" class="form-label required">Password</label>
-                        <div class="input-icon">
-                            <i class="fas fa-lock"></i>
+                        <div class="input-group">
+                            <i class="fas fa-lock input-icon"></i>
                             <input 
                                 type="password" 
                                 id="password" 
@@ -223,12 +224,15 @@ include __DIR__ . '/../includes/header.php';
                                 required
                                 minlength="8"
                             >
+                            <button type="button" class="btn-toggle-password" onclick="togglePassword('password')">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="confirm_password" class="form-label required">Confirm Password</label>
-                        <div class="input-icon">
-                            <i class="fas fa-lock"></i>
+                        <div class="input-group">
+                            <i class="fas fa-lock input-icon"></i>
                             <input 
                                 type="password" 
                                 id="confirm_password" 
@@ -238,6 +242,9 @@ include __DIR__ . '/../includes/header.php';
                                 required
                                 data-match="#password"
                             >
+                            <button type="button" class="btn-toggle-password" onclick="togglePassword('confirm_password')">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -249,22 +256,34 @@ include __DIR__ . '/../includes/header.php';
                     </label>
                 </div>
                 
-                <button type="submit" class="btn btn-primary btn-block btn-lg">
-                    Create Account <i class="fas fa-arrow-right"></i>
+                <button type="submit" class="btn btn-primary">
+                    <span>Create Account</span>
+                    <i class="fas fa-arrow-right"></i>
                 </button>
             </form>
             
-            <p class="auth-footer">
-                Already have an account? 
-                <a href="<?php echo BASE_URL; ?>/auth/login.php">Sign in</a>
-            </p>
+            <div class="auth-divider">
+                <span>or continue with</span>
+            </div>
+            
+            <div class="auth-social">
+                <button type="button" class="btn-social google">
+                    <i class="fab fa-google"></i>
+                    <span>Google</span>
+                </button>
+                <button type="button" class="btn-social linkedin">
+                    <i class="fab fa-linkedin-in"></i>
+                    <span>LinkedIn</span>
+                </button>
+            </div>
+            
+            <div class="auth-footer">
+                <p>Already have an account? <a href="<?php echo BASE_URL; ?>/auth/login.php">Sign in</a></p>
+            </div>
         </div>
         
         <div class="auth-visual">
             <div class="auth-visual-content">
-                <div class="auth-visual-icon">
-                    <i class="fas fa-rocket"></i>
-                </div>
                 <h2>Start Your Journey</h2>
                 <p id="visualText">Create your profile and get discovered by top employers worldwide.</p>
                 
@@ -282,17 +301,80 @@ include __DIR__ . '/../includes/header.php';
                         <span>Get personalized job recommendations</span>
                     </div>
                 </div>
+                
+                <div class="auth-visual-stats">
+                    <div class="visual-stat">
+                        <span class="number">50K+</span>
+                        <span class="label">Active Jobs</span>
+                    </div>
+                    <div class="visual-stat">
+                        <span class="number">10K+</span>
+                        <span class="label">Companies</span>
+                    </div>
+                    <div class="visual-stat">
+                        <span class="number">500K+</span>
+                        <span class="label">Candidates</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <style>
-.auth-register .auth-card {
-    max-height: 90vh;
+/* Auth Page Layout */
+.auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 100px var(--spacing-md) var(--spacing-xl);
+    background: var(--bg-primary);
+}
+
+.auth-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: 1100px;
+    width: 100%;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+}
+
+/* Auth Card (Form Side) */
+.auth-card {
+    padding: var(--spacing-2xl);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
     overflow-y: auto;
 }
 
+.auth-header {
+    text-align: center;
+    margin-bottom: var(--spacing-xl);
+}
+
+.auth-header .logo {
+    font-family: var(--font-heading);
+    font-size: 2rem;
+    color: var(--accent-primary);
+    margin-bottom: var(--spacing-md);
+    display: block;
+}
+
+.auth-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: var(--spacing-xs);
+}
+
+.auth-header p {
+    color: var(--text-muted);
+}
+
+/* Role Selector */
 .role-selector {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -319,12 +401,14 @@ include __DIR__ . '/../includes/header.php';
 
 .role-option:hover .role-content {
     border-color: var(--border-light);
+    transform: translateY(-2px);
 }
 
 .role-option.active .role-content,
 .role-option input:checked + .role-content {
     border-color: var(--accent-primary);
-    background: rgba(0, 230, 118, 0.05);
+    background: rgba(0, 230, 118, 0.08);
+    box-shadow: 0 0 20px rgba(0, 230, 118, 0.15);
 }
 
 .role-content i {
@@ -338,6 +422,7 @@ include __DIR__ . '/../includes/header.php';
     display: block;
     font-weight: 600;
     margin-bottom: 0.25rem;
+    color: var(--text-primary);
 }
 
 .role-content small {
@@ -345,20 +430,124 @@ include __DIR__ . '/../includes/header.php';
     font-size: 0.8rem;
 }
 
-.role-fields {
-    display: none;
+/* Form Styles */
+.auth-form .form-group {
+    margin-bottom: var(--spacing-md);
 }
 
-.role-fields.active {
-    display: block;
+.auth-form .form-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-xs);
 }
 
+.auth-form label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.auth-form .input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.auth-form .input-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.auth-form .form-control {
+    width: 100%;
+    padding: 0.875rem 3rem 0.875rem 2.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    transition: all var(--transition-fast);
+}
+
+.auth-form .form-control:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(0, 230, 118, 0.15);
+}
+
+.auth-form .form-control::placeholder {
+    color: var(--text-muted);
+}
+
+.auth-form .form-control.no-icon {
+    padding-left: 1rem;
+}
+
+.auth-form select.form-control {
+    padding-left: 1rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+}
+
+.auth-form textarea.form-control {
+    padding-left: 1rem;
+    min-height: 100px;
+    resize: vertical;
+}
+
+/* Form Row */
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--spacing-md);
 }
 
+/* Role Fields Toggle */
+.role-fields {
+    display: none;
+}
+
+.role-fields.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Password Toggle Button */
+.btn-toggle-password {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    transition: color var(--transition-fast);
+}
+
+.btn-toggle-password:hover {
+    color: var(--accent-primary);
+}
+
+/* File Upload */
 .file-upload {
     position: relative;
 }
@@ -375,7 +564,7 @@ include __DIR__ . '/../includes/header.php';
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-xl);
+    padding: var(--spacing-lg);
     background: var(--bg-tertiary);
     border: 2px dashed var(--border-color);
     border-radius: var(--radius-md);
@@ -385,6 +574,7 @@ include __DIR__ . '/../includes/header.php';
 
 .file-upload-label:hover {
     border-color: var(--accent-primary);
+    background: rgba(0, 230, 118, 0.03);
 }
 
 .file-upload-label i {
@@ -393,14 +583,168 @@ include __DIR__ . '/../includes/header.php';
     margin-bottom: var(--spacing-sm);
 }
 
+.file-upload-label span {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
 .file-upload-label small {
     color: var(--text-muted);
     font-size: 0.8rem;
+    margin-top: var(--spacing-xs);
 }
 
+/* Submit Button */
+.auth-form .btn-primary {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: var(--spacing-md);
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--bg-primary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.auth-form .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 230, 118, 0.4);
+}
+
+/* Divider */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    margin: var(--spacing-lg) 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.auth-divider span {
+    padding: 0 var(--spacing-md);
+}
+
+/* Social Buttons */
+.auth-social {
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+.btn-social {
+    flex: 1;
+    padding: 0.875rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.btn-social:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+}
+
+.btn-social.google:hover {
+    border-color: #EA4335;
+}
+
+.btn-social.linkedin:hover {
+    border-color: #0A66C2;
+}
+
+/* Auth Footer */
+.auth-footer {
+    text-align: center;
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+
+.auth-footer a {
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+.auth-footer a:hover {
+    text-decoration: underline;
+}
+
+/* Visual Side */
+.auth-visual {
+    background: linear-gradient(135deg, rgba(0, 230, 118, 0.15) 0%, rgba(0, 230, 118, 0.02) 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: var(--spacing-2xl);
+    position: relative;
+    overflow: hidden;
+}
+
+.auth-visual::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at center, rgba(0, 230, 118, 0.08) 0%, transparent 50%);
+    animation: pulse 8s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.auth-visual-content {
+    text-align: center;
+    position: relative;
+    z-index: 1;
+    max-width: 400px;
+}
+
+.auth-visual-content h2 {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-lg);
+    color: var(--text-primary);
+}
+
+.auth-visual-content p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    line-height: 1.7;
+    margin-bottom: var(--spacing-xl);
+}
+
+/* Auth Features */
 .auth-features {
     text-align: left;
-    margin-top: var(--spacing-xl);
+    width: 100%;
 }
 
 .auth-feature {
@@ -409,20 +753,140 @@ include __DIR__ . '/../includes/header.php';
     gap: var(--spacing-md);
     padding: var(--spacing-sm) 0;
     color: var(--text-secondary);
+    font-size: 0.95rem;
 }
 
 .auth-feature i {
     color: var(--accent-primary);
+    width: 24px;
+    text-align: center;
+}
+
+/* Visual Stats */
+.auth-visual-stats {
+    display: flex;
+    gap: var(--spacing-xl);
+    margin-top: var(--spacing-2xl);
+    padding-top: var(--spacing-xl);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.visual-stat {
+    text-align: center;
+}
+
+.visual-stat .number {
+    display: block;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+    font-family: var(--font-heading);
+}
+
+.visual-stat .label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Alert Styles */
+.alert {
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.alert-error {
+    background: rgba(244, 67, 54, 0.1);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    color: #f44336;
+}
+
+.alert-success {
+    background: rgba(0, 230, 118, 0.1);
+    border: 1px solid rgba(0, 230, 118, 0.3);
+    color: var(--accent-primary);
+}
+
+/* Terms Checkbox */
+.form-check {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    margin: var(--spacing-md) 0;
+}
+
+.form-check input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+}
+
+.form-check label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.form-check label a {
+    color: var(--accent-primary);
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .auth-container {
+        grid-template-columns: 1fr;
+        max-width: 550px;
+    }
+    
+    .auth-visual {
+        display: none;
+    }
 }
 
 @media (max-width: 768px) {
+    .auth-page {
+        padding: 80px var(--spacing-md) var(--spacing-xl);
+    }
+    
+    .auth-card {
+        padding: var(--spacing-lg);
+    }
+    
     .form-row {
         grid-template-columns: 1fr;
+    }
+    
+    .role-selector {
+        grid-template-columns: 1fr;
+    }
+    
+    .auth-social {
+        flex-direction: column;
     }
 }
 </style>
 
 <script>
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    const button = input.parentElement.querySelector('.btn-toggle-password i');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        button.classList.remove('fa-eye');
+        button.classList.add('fa-eye-slash');
+    } else {
+        input.type = 'password';
+        button.classList.remove('fa-eye-slash');
+        button.classList.add('fa-eye');
+    }
+}
+
 function toggleRole(role) {
     document.getElementById('roleInput').value = role;
     

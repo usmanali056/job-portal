@@ -6,7 +6,6 @@
 
 header('Content-Type: application/json');
 
-session_start();
 require_once '../config/config.php';
 require_once '../classes/Database.php';
 
@@ -48,11 +47,11 @@ function handleGet($db, $userId, $role)
       // Get seeker's applications
       $stmt = $db->prepare("
                 SELECT a.*, j.title as job_title, j.location as job_location,
-                       c.name as company_name, c.logo as company_logo
+                       c.company_name, c.logo as company_logo
                 FROM applications a
                 JOIN jobs j ON a.job_id = j.id
                 JOIN companies c ON j.company_id = c.id
-                WHERE a.user_id = ?
+                WHERE a.seeker_id = ?
                 ORDER BY a.applied_at DESC
             ");
       $stmt->execute([$userId]);
@@ -62,26 +61,26 @@ function handleGet($db, $userId, $role)
 
       if ($jobId) {
         $stmt = $db->prepare("
-                    SELECT a.*, u.first_name, u.last_name, u.email,
-                           sp.headline, sp.resume_file
+                    SELECT a.*, sp.first_name, sp.last_name, u.email,
+                           sp.headline, sp.resume_file_path as resume_file
                     FROM applications a
-                    JOIN users u ON a.user_id = u.id
+                    JOIN users u ON a.seeker_id = u.id
                     LEFT JOIN seeker_profiles sp ON u.id = sp.user_id
                     JOIN jobs j ON a.job_id = j.id
                     JOIN companies c ON j.company_id = c.id
-                    JOIN users hr ON hr.company_id = c.id AND hr.id = ?
-                    WHERE a.job_id = ?
+                    WHERE a.job_id = ? AND c.hr_user_id = ?
                     ORDER BY a.applied_at DESC
                 ");
-        $stmt->execute([$userId, $jobId]);
+        $stmt->execute([$jobId, $userId]);
       } else {
         $stmt = $db->prepare("
-                    SELECT a.*, j.title as job_title, u.first_name, u.last_name, u.email
+                    SELECT a.*, j.title as job_title, sp.first_name, sp.last_name, u.email
                     FROM applications a
-                    JOIN users u ON a.user_id = u.id
+                    JOIN users u ON a.seeker_id = u.id
+                    LEFT JOIN seeker_profiles sp ON u.id = sp.user_id
                     JOIN jobs j ON a.job_id = j.id
                     JOIN companies c ON j.company_id = c.id
-                    JOIN users hr ON hr.company_id = c.id AND hr.id = ?
+                    WHERE c.hr_user_id = ?
                     ORDER BY a.applied_at DESC
                     LIMIT 50
                 ");
@@ -109,13 +108,13 @@ function handleGet($db, $userId, $role)
     // Get application with all details
     $stmt = $db->prepare("
             SELECT a.*, j.title as job_title, j.description as job_description,
-                   c.name as company_name,
-                   u.first_name, u.last_name, u.email, u.phone,
+                   c.company_name,
+                   sp.first_name, sp.last_name, u.email, sp.phone,
                    sp.*
             FROM applications a
             JOIN jobs j ON a.job_id = j.id
             JOIN companies c ON j.company_id = c.id
-            JOIN users u ON a.user_id = u.id
+            JOIN users u ON a.seeker_id = u.id
             LEFT JOIN seeker_profiles sp ON u.id = sp.user_id
             WHERE a.id = ?
         ");
@@ -219,8 +218,7 @@ function handlePut($db, $userId, $role)
             SELECT a.id FROM applications a
             JOIN jobs j ON a.job_id = j.id
             JOIN companies c ON j.company_id = c.id
-            JOIN users u ON u.company_id = c.id
-            WHERE a.id = ? AND u.id = ?
+            WHERE a.id = ? AND c.hr_user_id = ?
         ");
     $stmt->execute([$applicationId, $userId]);
     if (!$stmt->fetch()) {

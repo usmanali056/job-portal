@@ -10,15 +10,14 @@ require_once '../classes/User.php';
 require_once '../classes/Job.php';
 require_once '../classes/Application.php';
 
-session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] !== ROLE_HR) {
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_HR) {
   header('Location: ' . BASE_URL . '/auth/login.php?redirect=hr/applications');
   exit;
 }
 
 $db = Database::getInstance()->getConnection();
-$userModel = new User($db);
-$applicationModel = new Application($db);
+$userModel = new User();
+$applicationModel = new Application();
 
 $hr = $userModel->findById($_SESSION['user_id']);
 
@@ -41,8 +40,8 @@ $myJobs = $stmt->fetchAll();
 // Build query
 $sql = "
     SELECT a.*, j.title as job_title, j.location as job_location, j.job_type,
-           u.full_name as applicant_name, u.email as applicant_email,
-           sp.headline, sp.phone, sp.resume_path
+           CONCAT(sp.first_name, ' ', sp.last_name) as applicant_name, u.email as applicant_email,
+           sp.headline, sp.phone, sp.resume_file_path as resume_path
     FROM applications a 
     JOIN jobs j ON a.job_id = j.id 
     JOIN users u ON a.seeker_id = u.id
@@ -63,7 +62,7 @@ if ($jobFilter) {
 }
 
 if ($searchQuery) {
-  $sql .= " AND (u.full_name LIKE ? OR u.email LIKE ? OR j.title LIKE ?)";
+  $sql .= " AND (CONCAT(sp.first_name, ' ', sp.last_name) LIKE ? OR u.email LIKE ? OR j.title LIKE ?)";
   $searchParam = '%' . $searchQuery . '%';
   $params[] = $searchParam;
   $params[] = $searchParam;
@@ -76,7 +75,7 @@ switch ($sortBy) {
     $sql .= " ORDER BY a.applied_at ASC";
     break;
   case 'name':
-    $sql .= " ORDER BY u.full_name ASC";
+    $sql .= " ORDER BY sp.first_name ASC, sp.last_name ASC";
     break;
   case 'status':
     $sql .= " ORDER BY a.status ASC, a.applied_at DESC";
@@ -123,17 +122,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 $pageTitle = 'Applications';
 require_once '../includes/header.php';
+
+// Get company info for sidebar
+$stmt = $db->prepare("SELECT * FROM companies WHERE hr_user_id = ?");
+$stmt->execute([$_SESSION['user_id']]);
+$company = $stmt->fetch(PDO::FETCH_ASSOC);
 ?>
 
-<div class="applications-page">
-  <div class="page-container">
-    <!-- Page Header -->
-    <div class="page-header">
-      <div class="header-content">
-        <h1>Application Tracking</h1>
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <aside class="dashboard-sidebar">
+    <div class="sidebar-header">
+      <div class="hr-avatar">
+        <?php echo strtoupper(substr($company['company_name'] ?? 'HR', 0, 2)); ?>
+      </div>
+      <h3><?php echo htmlspecialchars($company['company_name'] ?? $hr['email']); ?></h3>
+      <span class="role-badge hr">HR Manager</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="<?php echo BASE_URL; ?>/hr/index.php" class="nav-item">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/jobs.php" class="nav-item">
+        <i class="fas fa-briefcase"></i>
+        <span>My Jobs</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/post-job.php" class="nav-item">
+        <i class="fas fa-plus-circle"></i>
+        <span>Post New Job</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/applications.php" class="nav-item active">
+        <i class="fas fa-file-alt"></i>
+        <span>Applications</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/calendar.php" class="nav-item">
+        <i class="fas fa-calendar-alt"></i>
+        <span>Calendar</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/hr/company.php" class="nav-item">
+        <i class="fas fa-building"></i>
+        <span>Company Profile</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="<?php echo BASE_URL; ?>/auth/logout.php" class="logout-btn">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="dashboard-main">
+    <div class="dashboard-header">
+      <div class="header-left">
+        <h1><i class="fas fa-file-alt"></i> Application Tracking</h1>
         <p>Manage and track all incoming applications</p>
       </div>
-      <div class="header-actions">
+      <div class="header-right">
         <a href="<?php echo BASE_URL; ?>/hr/post-job.php" class="btn btn-primary">
           <i class="fas fa-plus"></i> Post New Job
         </a>
@@ -311,7 +360,7 @@ require_once '../includes/header.php';
         <?php endforeach; ?>
       </div>
     <?php endif; ?>
-  </div>
+  </main>
 </div>
 
 <style>
@@ -641,7 +690,6 @@ require_once '../includes/header.php';
     padding: 1rem;
     background: var(--bg-dark);
     border-radius: 8px;
-    border-left: 3px solid var(--primary-color);
   }
 
   .cover-letter-preview p {

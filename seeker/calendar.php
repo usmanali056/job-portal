@@ -4,11 +4,11 @@
  * View scheduled interviews and events
  */
 
-session_start();
 require_once '../config/config.php';
 require_once '../classes/Database.php';
 require_once '../classes/Event.php';
 require_once '../classes/User.php';
+require_once '../classes/SeekerProfile.php';
 
 // Check authentication
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_SEEKER) {
@@ -17,10 +17,12 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== ROLE_SEEKER) {
 }
 
 $db = Database::getInstance()->getConnection();
-$event = new Event($db);
-$user = new User($db);
+$event = new Event();
+$user = new User();
+$profileModel = new SeekerProfile();
 
 $userId = $_SESSION['user_id'];
+$profile = $profileModel->findByUserId($userId);
 
 // Get current month/year or from query params
 $currentMonth = isset($_GET['month']) ? intval($_GET['month']) : intval(date('m'));
@@ -37,14 +39,14 @@ if ($currentMonth < 1) {
 
 // Get events for this seeker (from applications)
 $stmt = $db->prepare("
-    SELECT e.*, j.title as job_title, j.location, c.name as company_name, c.logo as company_logo,
-           u.first_name as hr_first_name, u.last_name as hr_last_name, u.email as hr_email
+    SELECT e.*, j.title as job_title, j.location, c.company_name, c.logo as company_logo,
+           u.email as hr_email
     FROM events e
     JOIN applications a ON e.application_id = a.id
     JOIN jobs j ON a.job_id = j.id
     JOIN companies c ON j.company_id = c.id
-    JOIN users u ON e.created_by = u.id
-    WHERE a.user_id = ? 
+    JOIN users u ON e.hr_user_id = u.id
+    WHERE a.seeker_user_id = ? 
     AND MONTH(e.event_date) = ? 
     AND YEAR(e.event_date) = ?
     ORDER BY e.event_date ASC, e.event_time ASC
@@ -64,14 +66,14 @@ foreach ($monthEvents as $evt) {
 
 // Get upcoming interviews (next 30 days)
 $stmt = $db->prepare("
-    SELECT e.*, j.title as job_title, j.location, c.name as company_name, c.logo as company_logo,
-           u.first_name as hr_first_name, u.last_name as hr_last_name, u.email as hr_email, u.phone as hr_phone
+    SELECT e.*, j.title as job_title, j.location, c.company_name, c.logo as company_logo,
+           u.email as hr_email
     FROM events e
     JOIN applications a ON e.application_id = a.id
     JOIN jobs j ON a.job_id = j.id
     JOIN companies c ON j.company_id = c.id
-    JOIN users u ON e.created_by = u.id
-    WHERE a.user_id = ? 
+    JOIN users u ON e.hr_user_id = u.id
+    WHERE e.seeker_user_id = ? 
     AND e.event_date >= CURDATE()
     AND e.event_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
     ORDER BY e.event_date ASC, e.event_time ASC
@@ -82,12 +84,12 @@ $upcomingEvents = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get past interviews (last 30 days)
 $stmt = $db->prepare("
-    SELECT e.*, j.title as job_title, c.name as company_name, a.status as application_status
+    SELECT e.*, j.title as job_title, c.company_name, a.status as application_status
     FROM events e
     JOIN applications a ON e.application_id = a.id
     JOIN jobs j ON a.job_id = j.id
     JOIN companies c ON j.company_id = c.id
-    WHERE a.user_id = ? 
+    WHERE e.seeker_user_id = ? 
     AND e.event_date < CURDATE()
     ORDER BY e.event_date DESC
     LIMIT 5
@@ -133,49 +135,62 @@ include '../includes/header.php';
   <!-- Sidebar -->
   <aside class="dashboard-sidebar">
     <div class="sidebar-header">
-      <div class="user-avatar">
-        <?php echo strtoupper(substr($_SESSION['first_name'], 0, 1) . substr($_SESSION['last_name'], 0, 1)); ?>
+      <div class="seeker-avatar">
+        <?php echo strtoupper(substr($profile['first_name'] ?? 'U', 0, 1)); ?>
       </div>
-      <div class="user-info">
-        <h3><?php echo htmlspecialchars($_SESSION['first_name'] . ' ' . $_SESSION['last_name']); ?></h3>
-        <span class="role-badge seeker">Job Seeker</span>
+      <h3><?php echo htmlspecialchars(($profile['first_name'] ?? '') . ' ' . ($profile['last_name'] ?? '')); ?></h3>
+      <span class="role-badge seeker">Job Seeker</span>
       </div>
-    </div>
 
     <nav class="sidebar-nav">
-      <a href="index.php" class="nav-item">
-        <i class="fas fa-home"></i>
+      <a href="<?php echo BASE_URL; ?>/seeker/index.php" class="nav-item">
+        <i class="fas fa-tachometer-alt"></i>
         <span>Dashboard</span>
       </a>
-      <a href="profile.php" class="nav-item">
+      <a href="<?php echo BASE_URL; ?>/seeker/profile.php" class="nav-item">
         <i class="fas fa-user"></i>
         <span>My Profile</span>
       </a>
-      <a href="applications.php" class="nav-item">
+      <a href="<?php echo BASE_URL; ?>/seeker/applications.php" class="nav-item">
         <i class="fas fa-file-alt"></i>
-        <span>Applications</span>
+        <span>My Applications</span>
       </a>
-      <a href="calendar.php" class="nav-item active">
-        <i class="fas fa-calendar-alt"></i>
-        <span>Interviews</span>
-      </a>
-      <a href="saved-jobs.php" class="nav-item">
-        <i class="fas fa-heart"></i>
+      <a href="<?php echo BASE_URL; ?>/seeker/saved-jobs.php" class="nav-item">
+        <i class="fas fa-bookmark"></i>
         <span>Saved Jobs</span>
       </a>
-      <a href="../jobs/index.php" class="nav-item">
+      <a href="<?php echo BASE_URL; ?>/seeker/calendar.php" class="nav-item active">
+        <i class="fas fa-calendar-alt"></i>
+        <span>Calendar</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/seeker/resume.php" class="nav-item">
+        <i class="fas fa-file-pdf"></i>
+        <span>Resume Builder</span>
+      </a>
+      <a href="<?php echo BASE_URL; ?>/jobs" class="nav-item">
         <i class="fas fa-search"></i>
         <span>Browse Jobs</span>
       </a>
+      <a href="<?php echo BASE_URL; ?>/seeker/settings.php" class="nav-item">
+        <i class="fas fa-cog"></i>
+        <span>Settings</span>
+      </a>
     </nav>
+
+    <div class="sidebar-footer">
+      <a href="<?php echo BASE_URL; ?>/auth/logout.php" class="logout-btn">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+  </a>
+</div>
   </aside>
 
   <!-- Main Content -->
   <main class="dashboard-main">
     <div class="dashboard-header">
-      <div>
-        <h1>My Interviews</h1>
-        <p class="subtitle">View and prepare for your scheduled interviews</p>
+      <div class="header-left">
+        <h1><i class="fas fa-calendar-alt"></i> My Interviews</h1>
+        <p>View and prepare for your scheduled interviews</p>
       </div>
     </div>
 

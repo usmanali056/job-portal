@@ -6,7 +6,6 @@
 
 header('Content-Type: application/json');
 
-session_start();
 require_once '../config/config.php';
 require_once '../classes/Database.php';
 
@@ -26,7 +25,7 @@ switch ($method) {
   case 'GET':
     // Get all saved jobs
     $stmt = $db->prepare("
-            SELECT j.*, c.name as company_name, c.logo as company_logo, sj.saved_at
+            SELECT j.*, c.company_name, c.logo as company_logo, sj.saved_at
             FROM saved_jobs sj
             JOIN jobs j ON sj.job_id = j.id
             JOIN companies c ON j.company_id = c.id
